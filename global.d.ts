@@ -1,0 +1,5 @@
+declare module "*.png"
+declare module "*.svg"
+declare module "*.ico"
+declare module "data-base64:*"
+declare module "*.css"
