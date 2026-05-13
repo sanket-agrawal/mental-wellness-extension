@@ -15,7 +15,8 @@ import { MenuScreen } from "./components/MenuScreen"
 import { PomodoroScreen } from "./components/features/Pomodoro"
 import { ChatScreen } from "./components/features/Ai/ChatScreen"
 import { QuoteScreen } from "./components/features/Quote"
-import { MeditateScreen } from "./components/features/Meditation"
+import { BreatheScreen } from "./components/features/Meditation"
+import { SoundsScreen } from "./components/features/Sound"
 
 const storage = new Storage({ area: "session" })
 
@@ -88,7 +89,7 @@ function App() {
 
   if (!isHydrated) {
     return (
-      <div className="w-[380px] h-[520px] flex items-center justify-center bg-white">
+     <div className="w-[380px] h-[600px] flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0c3e6f] to-[#16B7C2] flex items-center justify-center animate-pulse">
             <svg
@@ -124,7 +125,7 @@ function App() {
       } transition-opacity duration-500`}
       style={{
         width: 380,
-        height: 520,
+        height: 600,
         position: "relative",
         overflow: "hidden",
         background:
@@ -277,22 +278,21 @@ function App() {
         {
           s: "quote" as Screen,
           node: (
-            <QuoteScreen
-              quote={QUOTES[quoteIdx]}
-              onBack={() => go("menu")}
-              onNext={() =>
-                setQuoteIdx((i) => (i + 1) % QUOTES.length)
-              }
-            />
+             <QuoteScreen onBack={() => go("menu")} />
           )
         },
 
         {
-          s: "meditate" as Screen,
+          s: "breathe" as Screen,
           node: (
-            <MeditateScreen
+            <BreatheScreen
               onBack={() => go("menu")}
             />
+          )
+        },{
+          s: "sound" as Screen,
+          node:(
+            <SoundsScreen onBack={()=>go("menu")}/>
           )
         }
       ].map(({ s, node }) => (

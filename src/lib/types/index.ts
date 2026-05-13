@@ -1,10 +1,4 @@
-export type Screen =
-  | "home"
-  | "menu"
-  | "pomodoro"
-  | "chat"
-  | "quote"
-  | "meditate"
+export type Screen = "menu" | "pomodoro" | "chat" | "quote" | "breathe" | "sound"
 
 export type PomodoroMode =
   | "focus"

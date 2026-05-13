@@ -49,45 +49,32 @@ export const MEDITATE_STEPS = [
 ]
 
 
-export const POMO_DEFAULTS: Record<PomodoroMode, number> = { focus: 25, short: 5, long: 15 }
+
+export  const POMO_DEFAULTS: Record<PomodoroMode, number> = { focus: 25, short: 5, long: 15 }
 export const POMO_LABELS: Record<PomodoroMode, string> = { focus: "Focus", short: "Short Break", long: "Long Break" }
+export const CIRC = 2 * Math.PI * 88
 export const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
 
-export const CIRC = 2 * Math.PI * 88
+
 
 
 
 export const randFrom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]
 
-export const AFFIRMATIONS = [
-  "You showed up today. That's enough.",
-  "Progress, not perfection.",
-  "One breath at a time.",
-  "You are not alone in this.",
-  "Rest is productive too.",
-  "Your feelings are valid.",
-  "You have made it through 100% of your hard days.",
-]
-
-
-export const QUOTES: Quote[] = [
-  { text: "You don't have to be positive all the time. It's okay to feel sad, angry, or anxious. Having feelings doesn't make you negative — it makes you human.", author: "Lori Deschene" },
-  { text: "Almost everything will work again if you unplug it for a few minutes — including you.", author: "Anne Lamott" },
-  { text: "You are allowed to be both a masterpiece and a work in progress simultaneously.", author: "Sophia Bush" },
-  { text: "Breathe. You're going to be okay. You've survived every difficult day so far.", author: "Daniell Koepke" },
-  { text: "Be gentle with yourself. You are a child of the universe, no less than the trees and the stars.", author: "Max Ehrmann" },
-  { text: "You yourself, as much as anybody in the entire universe, deserve your love and affection.", author: "Buddha" },
+export const QUOTES = [
+  { text: "You don't have to be positive all the time. It's perfectly okay to feel sad, angry, annoyed, or anxious.", author: "Lori Deschene" },
   { text: "Even the darkest night will end and the sun will rise.", author: "Victor Hugo" },
-  { text: "Healing is not linear. Be patient with yourself — every small step counts.", author: "Unknown" },
-  { text: "You are braver than you believe, stronger than you seem, and smarter than you think.", author: "A.A. Milne" },
-  { text: "Rest is not idle. Rest is the work of letting yourself be whole again.", author: "Unknown" },
-  { text: "The present moment is the only time over which we have dominion.", author: "Thich Nhat Hanh" },
-  { text: "You don't have to earn rest. You deserve it simply because you exist.", author: "Unknown" },
+  { text: "You are allowed to be both a masterpiece and a work in progress simultaneously.", author: "Sophia Bush" },
+  { text: "Healing is not linear. Be gentle with yourself.", author: "Unknown" },
+  { text: "The bravest thing I ever did was continuing my life when I wanted to die.", author: "Juliette Lewis" },
 ]
-
-export const FEELING_OPTIONS: FeelingOption[] = [
-  { label: "Seen", symbol: "◇" },
-  { label: "Hopeful", symbol: "✦" },
-  { label: "Calm", symbol: "○" },
-  { label: "Grateful", symbol: "◈" },
+export const AFFIRMATIONS = [
+  "I am worthy of love and care, especially from myself.",
+  "This moment is hard, but I have survived hard moments before.",
+  "My feelings are valid, and I am allowed to feel them.",
+  "I am doing the best I can, and that is enough.",
+]
+export const FEELING_OPTIONS = [
+  { symbol: "💙", label: "Seen" }, { symbol: "✨", label: "Hopeful" },
+  { symbol: "🌱", label: "Calm" },  { symbol: "💭", label: "Thinking" },
 ]

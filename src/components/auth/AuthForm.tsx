@@ -1,5 +1,4 @@
 import { useState } from "react"
-
 import {
     Eye,
     EyeOff,
@@ -65,33 +64,82 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     icon?: React.ReactNode
     rightEl?: React.ReactNode
 }
-function Input({ label, error, valid, icon, rightEl, className = "", ...rest }: InputProps) {
-    const borderClass = error
-        ? "border-red-400 focus:ring-red-200"
-        : valid
-            ? "border-emerald-400 focus:ring-emerald-100"
-            : "border-slate-200 focus:ring-cyan-100"
+function Input({ label, error, valid, icon, rightEl, style, ...rest }: InputProps) {
+    const borderColor = error ? "#f87171" : valid ? "#34d399" : "#e2e8f0"
+    const focusRingColor = error ? "#fecaca" : valid ? "#d1fae5" : "#cffafe"
+
     return (
-        <div className="space-y-1">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <label
+                style={{
+                    display: "block",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em"
+                }}
+            >
                 {label}
             </label>
-            <div className="relative">
+            <div style={{ position: "relative" }}>
                 {icon && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300">
+                    <span
+                        style={{
+                            position: "absolute",
+                            left: "12px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            color: "#cbd5e1",
+                            display: "flex",
+                            alignItems: "center"
+                        }}
+                    >
                         {icon}
                     </span>
                 )}
                 <input
-                    className={`w-full ${icon ? "pl-9" : "pl-3"} ${rightEl ? "pr-10" : "pr-3"
-                        } py-2.5 bg-slate-50 border rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 transition-all ${borderClass} ${className}`}
+                    style={{
+                        width: "100%",
+                        paddingLeft: icon ? "36px" : "12px",
+                        paddingRight: rightEl ? "40px" : "12px",
+                        paddingTop: "10px",
+                        paddingBottom: "10px",
+                        backgroundColor: "#f8fafc",
+                        border: `1px solid ${borderColor}`,
+                        borderRadius: "12px",
+                        fontSize: "14px",
+                        color: "#1e293b",
+                        outline: "none",
+                        boxSizing: "border-box",
+                        transition: "border-color 0.2s, box-shadow 0.2s",
+                        ...style
+                    }}
+                    onFocus={(e) => {
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${focusRingColor}`
+                        e.currentTarget.style.borderColor = borderColor
+                    }}
+                    onBlur={(e) => {
+                        e.currentTarget.style.boxShadow = "none"
+                    }}
                     {...rest}
                 />
                 {rightEl && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2">{rightEl}</span>
+                    <span
+                        style={{
+                            position: "absolute",
+                            right: "12px",
+                            top: "50%",
+                            transform: "translateY(-50%)"
+                        }}
+                    >
+                        {rightEl}
+                    </span>
                 )}
             </div>
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && (
+                <p style={{ fontSize: "12px", color: "#ef4444", margin: 0 }}>{error}</p>
+            )}
         </div>
     )
 }
@@ -128,7 +176,18 @@ function PasswordInput({
                 <button
                     type="button"
                     onClick={() => setShow(!show)}
-                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                    style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#94a3b8",
+                        display: "flex",
+                        alignItems: "center",
+                        padding: 0,
+                        transition: "color 0.2s"
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#475569")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
                 >
                     {show ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -145,8 +204,30 @@ function OtpInput({ value, onChange }: { value: string; onChange: (v: string) =>
             value={value}
             maxLength={6}
             onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
-            className="w-full px-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-center tracking-[0.5em] text-2xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 transition-all"
+            style={{
+                width: "100%",
+                padding: "16px",
+                backgroundColor: "#f8fafc",
+                border: "2px solid #e2e8f0",
+                borderRadius: "12px",
+                textAlign: "center",
+                letterSpacing: "0.5em",
+                fontSize: "24px",
+                fontWeight: 700,
+                color: "#1e293b",
+                outline: "none",
+                boxSizing: "border-box",
+                transition: "border-color 0.2s, box-shadow 0.2s"
+            }}
             placeholder="——————"
+            onFocus={(e) => {
+                e.currentTarget.style.boxShadow = "0 0 0 2px #a5f3fc"
+                e.currentTarget.style.borderColor = "#22d3ee"
+            }}
+            onBlur={(e) => {
+                e.currentTarget.style.boxShadow = "none"
+                e.currentTarget.style.borderColor = "#e2e8f0"
+            }}
         />
     )
 }
@@ -159,32 +240,41 @@ function PasswordStrength({ checks }: { checks: ReturnType<typeof checkPassword>
         { key: "number", label: "0–9" },
         { key: "special", label: "!@#$%^&*" }
     ] as const
+
     const passed = Object.values(checks).filter(Boolean).length
+    const barColor =
+        passed === 1 ? "#f87171" :
+        passed === 2 ? "#fb923c" :
+        passed === 3 ? "#facc15" :
+        "#34d399"
+
     return (
-        <div className="space-y-1.5">
-            <div className="flex gap-1">
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div style={{ display: "flex", gap: "4px" }}>
                 {[0, 1, 2, 3].map((i) => (
                     <div
                         key={i}
-                        className={`h-1 flex-1 rounded-full transition-all duration-300 ${i < passed
-                            ? passed === 1
-                                ? "bg-red-400"
-                                : passed === 2
-                                    ? "bg-orange-400"
-                                    : passed === 3
-                                        ? "bg-yellow-400"
-                                        : "bg-emerald-400"
-                            : "bg-slate-200"
-                            }`}
+                        style={{
+                            height: "4px",
+                            flex: 1,
+                            borderRadius: "999px",
+                            backgroundColor: i < passed ? barColor : "#e2e8f0",
+                            transition: "background-color 0.3s"
+                        }}
                     />
                 ))}
             </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
                 {items.map(({ key, label }) => (
                     <span
                         key={key}
-                        className={`text-[10px] ${checks[key] ? "text-emerald-500" : "text-slate-400"
-                            } flex items-center gap-0.5`}
+                        style={{
+                            fontSize: "10px",
+                            color: checks[key] ? "#10b981" : "#94a3b8",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "2px"
+                        }}
                     >
                         <span>{checks[key] ? "✓" : "·"}</span> {label}
                     </span>
@@ -208,14 +298,49 @@ function Btn({
     onClick?: () => void
     type?: "submit" | "button"
 }) {
+    const isDisabled = disabled || loading
     return (
         <button
             type={type}
-            disabled={disabled || loading}
+            disabled={isDisabled}
             onClick={onClick}
-            className="w-full py-2.5 rounded-xl font-semibold text-sm text-white bg-[#0c3e6f]  hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-cyan-200/40"
+            style={{
+                width: "100%",
+                paddingTop: "10px",
+                paddingBottom: "10px",
+                borderRadius: "12px",
+                fontWeight: 600,
+                fontSize: "14px",
+                color: "#ffffff",
+                backgroundColor: "#0c3e6f",
+                border: "none",
+                cursor: isDisabled ? "not-allowed" : "pointer",
+                opacity: isDisabled ? 0.4 : 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                boxShadow: "0 4px 12px rgba(34,211,238,0.25)",
+                transition: "opacity 0.2s, transform 0.1s"
+            }}
+            onMouseEnter={(e) => {
+                if (!isDisabled) e.currentTarget.style.opacity = "0.9"
+            }}
+            onMouseLeave={(e) => {
+                if (!isDisabled) e.currentTarget.style.opacity = "1"
+            }}
+            onMouseDown={(e) => {
+                if (!isDisabled) e.currentTarget.style.transform = "scale(0.98)"
+            }}
+            onMouseUp={(e) => {
+                if (!isDisabled) e.currentTarget.style.transform = "scale(1)"
+            }}
         >
-            {loading && <Loader2 size={15} className="animate-spin" />}
+            {loading && (
+                <span style={{ display: "flex", alignItems: "center", animation: "spin 1s linear infinite" }}>
+                    <Loader2 size={15} />
+                </span>
+            )}
             {children}
         </button>
     )
@@ -234,8 +359,8 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
     const [signupStep, setSignupStep] = useState<SignupStep>("form")
     const [fpStep, setFpStep] = useState<FPStep>("email")
     const [signupToken, setSignupToken] = useState("")
-   const [googleLoading, setGoogleLoading] = useState(false)
-    // Form fields
+    const [googleLoading, setGoogleLoading] = useState(false)
+
     const [firstName, setFirstName] = useState("")
     const [lastName, setLastName] = useState("")
     const [email, setEmail] = useState("")
@@ -244,18 +369,15 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
     const [confirmPassword, setConfirmPassword] = useState("")
     const [otp, setOtp] = useState("")
 
-    // Forgot password fields
     const [fpEmail, setFpEmail] = useState("")
     const [fpOtp, setFpOtp] = useState("")
     const [newPassword, setNewPassword] = useState("")
     const [resetConfirm, setResetConfirm] = useState("")
 
-    // Field errors
     const [errors, setErrors] = useState<Record<string, string>>({})
     const pwChecks = checkPassword(password)
     const newPwChecks = checkPassword(newPassword)
 
-    // Mutations
     const login = useLogin()
     const register = useRegister()
     const verifyOtp = useVerifyOtp()
@@ -277,15 +399,9 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         setGoogleLoading(true)
         try {
             const clientId = process.env.PLASMO_PUBLIC_GOOGLE_CLIENT_ID
-            if (!clientId) {
-                toastError("Google Client ID missing in .env")
-                return
-            }
- 
+            if (!clientId) { toastError("Google Client ID missing in .env"); return }
             const redirectUri = chrome.identity.getRedirectURL()
- 
             const nonce = Math.random().toString(36).substring(2)
- 
             const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth")
             authUrl.searchParams.set("client_id", clientId)
             authUrl.searchParams.set("redirect_uri", redirectUri)
@@ -293,8 +409,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
             authUrl.searchParams.set("scope", "openid email profile")
             authUrl.searchParams.set("nonce", nonce)
             authUrl.searchParams.set("prompt", "select_account")
- 
-            // Opens Google account picker in a proper Chrome window (not blocked)
             const responseUrl = await new Promise<string>((resolve, reject) => {
                 chrome.identity.launchWebAuthFlow(
                     { url: authUrl.toString(), interactive: true },
@@ -307,39 +421,26 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                     }
                 )
             })
- 
             const hash = new URL(responseUrl).hash.substring(1)
             const params = new URLSearchParams(hash)
             const idToken = params.get("id_token")
- 
-            if (!idToken) {
-                toastError("Failed to get ID token from Google")
-                return
-            }
- 
+            if (!idToken) { toastError("Failed to get ID token from Google"); return }
             const res = await fetch(
                 `${process.env.PLASMO_PUBLIC_NEW_API_URL}/api/v1/auth/google-signin`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ idToken }) 
+                    body: JSON.stringify({ idToken })
                 }
             )
- 
             const data = await res.json()
-            if (!res.ok || !data.success) {
-                toastError(data.message || "Google login failed")
-                return
-            }
- 
+            if (!res.ok || !data.success) { toastError(data.message || "Google login failed"); return }
             const { token, user } = data.data
             if (!token || !user) { toastError("Invalid server response"); return }
- 
             setUser(user)
             await chrome.storage.local.set({ authToken: token, user })
             success("Google Login Successful! 🎉")
             onSuccess?.()
- 
         } catch (err: any) {
             console.error("Google login error:", err)
             if (String(err).toLowerCase().includes("cancel") || String(err).toLowerCase().includes("user closed")) {
@@ -352,7 +453,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         }
     }
 
-    // ── Validation helpers ──
     const validateField = (name: string, value: string) => {
         let msg = ""
         switch (name) {
@@ -381,7 +481,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         Object.values(pwChecks).every(Boolean) &&
         password === confirmPassword
 
-    // ── Switch mode – clear state ──
     const switchMode = (m: Mode) => {
         setMode(m)
         setErrors({})
@@ -390,7 +489,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         setOtp("")
     }
 
-    // ── Login ──
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!email || !password) return toastError("Please fill all fields")
@@ -410,7 +508,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         }
     }
 
-    // ── Signup ──
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!isSignupValid) return toastError("Please complete all fields correctly")
@@ -432,7 +529,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         }
     }
 
-    // ── Verify signup OTP ──
     const handleVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault()
         if (otp.length !== 6) return toastError("Enter valid 6-digit OTP")
@@ -456,7 +552,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         }
     }
 
-    // ── Resend OTP ──
     const handleResend = async () => {
         try {
             await resendOtp.mutateAsync(email.trim().toLowerCase())
@@ -466,7 +561,6 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         }
     }
 
-    // ── FP: Send OTP ──
     const handleFpSendOtp = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!fpEmail) return toastError("Enter your email")
@@ -480,15 +574,11 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         }
     }
 
-    // ── FP: Verify OTP ──
     const handleFpVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault()
         if (fpOtp.length !== 6) return toastError("Enter valid 6-digit OTP")
         try {
-            const res = await verifyFpOtp.mutateAsync({
-                email: fpEmail.trim().toLowerCase(),
-                otp: fpOtp
-            })
+            const res = await verifyFpOtp.mutateAsync({ email: fpEmail.trim().toLowerCase(), otp: fpOtp })
             if (!res.data.success) return toastError(res.data.message || "Invalid OTP")
             success("OTP verified!")
             setFpStep("reset-password")
@@ -497,13 +587,11 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         }
     }
 
-    // ── FP: Reset password ──
     const handleResetPw = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!newPassword || !resetConfirm) return toastError("Fill all fields")
         if (newPassword !== resetConfirm) return toastError("Passwords do not match")
-        if (!Object.values(newPwChecks).every(Boolean))
-            return toastError("Password does not meet requirements")
+        if (!Object.values(newPwChecks).every(Boolean)) return toastError("Password does not meet requirements")
         try {
             const res = await resetPw.mutateAsync({
                 email: fpEmail.trim().toLowerCase(),
@@ -537,48 +625,108 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                 background: "#fff",
                 display: "flex",
                 flexDirection: "column",
-                overflowY: "auto"
+                overflowY: "auto",
+                padding: "12px"
             }}
-            className="p-3"
         >
+            {/* Spinner keyframes injected once */}
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
             {/* Brand header */}
-            <div className="flex items-center gap-2 px-4 pt-5 pb-3 border-b border-slate-100">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0c3e6f] to-[#16B7C2] flex items-center justify-center shadow">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "20px 16px 12px",
+                    borderBottom: "1px solid #f1f5f9"
+                }}
+            >
+                <div
+                    style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "8px",
+                        background: "linear-gradient(135deg, #0c3e6f, #16B7C2)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 2px 8px rgba(12,62,111,0.3)"
+                    }}
+                >
+                    <svg style={{ width: "16px", height: "16px", color: "#fff" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                 </div>
                 <div>
-                    <span className="text-sm font-bold text-[#0c3e6f]">Catalyst</span>
-                    <span className="text-sm font-bold text-[#16B7C2]">Care</span>
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: "#0c3e6f" }}>Catalyst</span>
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: "#16B7C2" }}>Care</span>
                 </div>
             </div>
 
             {/* Toast container */}
-            <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-1.5 w-[340px] pointer-events-none">
+            <div
+                style={{
+                    position: "fixed",
+                    top: "8px",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    zIndex: 50,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                    width: "340px",
+                    pointerEvents: "none"
+                }}
+            >
                 {toasts.map((t) => (
                     <div
                         key={t.id}
-                        className={`px-3 py-2 rounded-xl text-xs font-medium shadow-lg text-white animate-fade-in ${t.type === "success" ? "bg-emerald-500" : "bg-red-500"}`}
+                        style={{
+                            padding: "8px 12px",
+                            borderRadius: "12px",
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                            color: "#ffffff",
+                            backgroundColor: t.type === "success" ? "#10b981" : "#ef4444"
+                        }}
                     >
                         {t.msg}
                     </div>
                 ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4">
+            <div
+                style={{
+                    flex: 1,
+                    overflowY: "auto",
+                    padding: "16px"
+                }}
+            >
 
                 {/* ── FORGOT PASSWORD FLOW ── */}
                 {mode === "forgot-password" && (
-                    <div className="space-y-4">
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                         {fpStep === "email" && (
-                            <form onSubmit={handleFpSendOtp} className="space-y-4">
-                                <div className="text-center space-y-1">
-                                    <div className="w-12 h-12 rounded-2xl bg-cyan-50 mx-auto flex items-center justify-center">
-                                        <Mail size={22} className="text-[#16B7C2]" />
+                            <form onSubmit={handleFpSendOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <div
+                                        style={{
+                                            width: "48px",
+                                            height: "48px",
+                                            borderRadius: "16px",
+                                            backgroundColor: "#ecfeff",
+                                            margin: "0 auto",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center"
+                                        }}
+                                    >
+                                        <Mail size={22} style={{ color: "#16B7C2" }} />
                                     </div>
-                                    <h2 className="text-base font-bold text-slate-800">Forgot Password?</h2>
-                                    <p className="text-xs text-slate-500">We'll send you a verification code</p>
+                                    <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Forgot Password?</h2>
+                                    <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>We'll send you a verification code</p>
                                 </div>
                                 <Input
                                     label="Email"
@@ -593,7 +741,18 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                                 <button
                                     type="button"
                                     onClick={resetFp}
-                                    className="w-full text-xs text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1"
+                                    style={{
+                                        width: "100%",
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "12px",
+                                        color: "#64748b",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: "4px"
+                                    }}
                                 >
                                     <ArrowLeft size={12} /> Back to Login
                                 </button>
@@ -601,14 +760,25 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                         )}
 
                         {fpStep === "verify-otp" && (
-                            <form onSubmit={handleFpVerifyOtp} className="space-y-4">
-                                <div className="text-center space-y-1">
-                                    <div className="w-12 h-12 rounded-2xl bg-cyan-50 mx-auto flex items-center justify-center">
-                                        <Mail size={22} className="text-[#16B7C2]" />
+                            <form onSubmit={handleFpVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <div
+                                        style={{
+                                            width: "48px",
+                                            height: "48px",
+                                            borderRadius: "16px",
+                                            backgroundColor: "#ecfeff",
+                                            margin: "0 auto",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center"
+                                        }}
+                                    >
+                                        <Mail size={22} style={{ color: "#16B7C2" }} />
                                     </div>
-                                    <h2 className="text-base font-bold text-slate-800">Verify OTP</h2>
-                                    <p className="text-xs text-slate-500">
-                                        Code sent to <span className="font-semibold text-slate-700">{fpEmail}</span>
+                                    <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Verify OTP</h2>
+                                    <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                        Code sent to <span style={{ fontWeight: 600, color: "#334155" }}>{fpEmail}</span>
                                     </p>
                                 </div>
                                 <OtpInput value={fpOtp} onChange={setFpOtp} />
@@ -616,7 +786,18 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                                 <button
                                     type="button"
                                     onClick={() => setFpStep("email")}
-                                    className="w-full text-xs text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1"
+                                    style={{
+                                        width: "100%",
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "12px",
+                                        color: "#64748b",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: "4px"
+                                    }}
                                 >
                                     <ArrowLeft size={12} /> Change Email
                                 </button>
@@ -624,13 +805,24 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                         )}
 
                         {fpStep === "reset-password" && (
-                            <form onSubmit={handleResetPw} className="space-y-4">
-                                <div className="text-center space-y-1">
-                                    <div className="w-12 h-12 rounded-2xl bg-cyan-50 mx-auto flex items-center justify-center">
-                                        <Lock size={22} className="text-[#16B7C2]" />
+                            <form onSubmit={handleResetPw} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <div
+                                        style={{
+                                            width: "48px",
+                                            height: "48px",
+                                            borderRadius: "16px",
+                                            backgroundColor: "#ecfeff",
+                                            margin: "0 auto",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center"
+                                        }}
+                                    >
+                                        <Lock size={22} style={{ color: "#16B7C2" }} />
                                     </div>
-                                    <h2 className="text-base font-bold text-slate-800">New Password</h2>
-                                    <p className="text-xs text-slate-500">Make it strong & memorable</p>
+                                    <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>New Password</h2>
+                                    <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>Make it strong & memorable</p>
                                 </div>
                                 <PasswordInput
                                     label="New Password"
@@ -659,31 +851,58 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
 
                 {/* ── SIGNUP OTP VERIFY ── */}
                 {mode !== "forgot-password" && signupStep === "verify-otp" && (
-                    <form onSubmit={handleVerifyOtp} className="space-y-4">
-                        <div className="text-center space-y-1">
-                            <div className="w-12 h-12 rounded-2xl bg-cyan-50 mx-auto flex items-center justify-center">
-                                <Mail size={22} className="text-[#16B7C2]" />
+                    <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <div
+                                style={{
+                                    width: "48px",
+                                    height: "48px",
+                                    borderRadius: "16px",
+                                    backgroundColor: "#ecfeff",
+                                    margin: "0 auto",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                }}
+                            >
+                                <Mail size={22} style={{ color: "#16B7C2" }} />
                             </div>
-                            <h2 className="text-base font-bold text-slate-800">Verify Email</h2>
-                            <p className="text-xs text-slate-500">
-                                Code sent to <span className="font-semibold text-slate-700">{email}</span>
+                            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Verify Email</h2>
+                            <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                Code sent to <span style={{ fontWeight: 600, color: "#334155" }}>{email}</span>
                             </p>
                         </div>
                         <OtpInput value={otp} onChange={setOtp} />
                         <Btn disabled={otp.length !== 6} loading={loading}>Verify Email</Btn>
-                        <div className="flex flex-col items-center gap-1">
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                             <button
                                 type="button"
                                 onClick={handleResend}
                                 disabled={loading}
-                                className="text-xs text-[#16B7C2] hover:underline"
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: loading ? "not-allowed" : "pointer",
+                                    fontSize: "12px",
+                                    color: "#16B7C2",
+                                    textDecoration: "underline"
+                                }}
                             >
                                 Resend OTP
                             </button>
                             <button
                                 type="button"
                                 onClick={() => { setSignupStep("form"); setOtp("") }}
-                                className="text-xs text-slate-500 flex items-center gap-1"
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    fontSize: "12px",
+                                    color: "#64748b",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px"
+                                }}
                             >
                                 <ArrowLeft size={12} /> Go back
                             </button>
@@ -695,30 +914,70 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                 {mode !== "forgot-password" && signupStep === "form" && (
                     <>
                         {/* Tab switcher */}
-                        <div className="flex bg-slate-100 rounded-xl p-1 mb-4">
+                        <div
+                            style={{
+                                display: "flex",
+                                backgroundColor: "#f1f5f9",
+                                borderRadius: "12px",
+                                padding: "4px",
+                                marginBottom: "16px"
+                            }}
+                        >
                             {(["login", "signup"] as Mode[]).map((m) => (
                                 <button
                                     key={m}
                                     type="button"
                                     onClick={() => switchMode(m)}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${mode === m
-                                        ? "bg-white text-[#0c3e6f] shadow-sm"
-                                        : "text-slate-400 hover:text-slate-600"
-                                        }`}
+                                    style={{
+                                        flex: 1,
+                                        paddingTop: "8px",
+                                        paddingBottom: "8px",
+                                        borderRadius: "8px",
+                                        fontSize: "12px",
+                                        fontWeight: 600,
+                                        border: "none",
+                                        cursor: "pointer",
+                                        transition: "all 0.2s",
+                                        backgroundColor: mode === m ? "#ffffff" : "transparent",
+                                        color: mode === m ? "#0c3e6f" : "#94a3b8",
+                                        boxShadow: mode === m ? "0 1px 3px rgba(0,0,0,0.1)" : "none"
+                                    }}
                                 >
                                     {m === "login" ? "Sign In" : "Sign Up"}
                                 </button>
                             ))}
                         </div>
 
-                        {/* ── GOOGLE BUTTON (clean, no hidden element trick) ── */}
+                        {/* Google button */}
                         <button
                             type="button"
                             onClick={() => handleGoogleLogin()}
                             disabled={googleLoading}
-                            className="w-full flex items-center justify-center gap-2.5 py-2.5 mb-4 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 active:scale-[0.98] transition-all shadow-sm"
+                            style={{
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "10px",
+                                paddingTop: "10px",
+                                paddingBottom: "10px",
+                                marginBottom: "16px",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: "12px",
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                color: "#334155",
+                                backgroundColor: "#ffffff",
+                                cursor: googleLoading ? "not-allowed" : "pointer",
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                                transition: "background-color 0.2s, transform 0.1s",
+                                opacity: googleLoading ? 0.6 : 1
+                            }}
+                            onMouseEnter={(e) => { if (!googleLoading) e.currentTarget.style.backgroundColor = "#f8fafc" }}
+                            onMouseLeave={(e) => { if (!googleLoading) e.currentTarget.style.backgroundColor = "#ffffff" }}
+                            onMouseDown={(e) => { if (!googleLoading) e.currentTarget.style.transform = "scale(0.98)" }}
+                            onMouseUp={(e) => { if (!googleLoading) e.currentTarget.style.transform = "scale(1)" }}
                         >
-                            {/* Official Google colours on the G icon */}
                             <svg width="18" height="18" viewBox="0 0 48 48">
                                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
                                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
@@ -729,18 +988,35 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                         </button>
 
                         {/* Divider */}
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="flex-1 h-px bg-slate-100" />
-                            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">or</span>
-                            <div className="flex-1 h-px bg-slate-100" />
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                marginBottom: "16px"
+                            }}
+                        >
+                            <div style={{ flex: 1, height: "1px", backgroundColor: "#f1f5f9" }} />
+                            <span
+                                style={{
+                                    fontSize: "10px",
+                                    color: "#94a3b8",
+                                    fontWeight: 500,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.1em"
+                                }}
+                            >
+                                or
+                            </span>
+                            <div style={{ flex: 1, height: "1px", backgroundColor: "#f1f5f9" }} />
                         </div>
 
                         <form
                             onSubmit={mode === "login" ? handleLogin : handleSignup}
-                            className="space-y-3"
+                            style={{ display: "flex", flexDirection: "column", gap: "12px" }}
                         >
                             {mode === "signup" && (
-                                <div className="grid grid-cols-2 gap-2">
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                                     <Input
                                         label="First Name"
                                         value={firstName}
@@ -814,11 +1090,18 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                             )}
 
                             {mode === "login" && (
-                                <div className="text-right">
+                                <div style={{ textAlign: "right" }}>
                                     <button
                                         type="button"
                                         onClick={() => setMode("forgot-password")}
-                                        className="text-xs text-[#16B7C2] hover:underline"
+                                        style={{
+                                            background: "none",
+                                            border: "none",
+                                            cursor: "pointer",
+                                            fontSize: "12px",
+                                            color: "#16B7C2",
+                                            textDecoration: "underline"
+                                        }}
                                     >
                                         Forgot Password?
                                     </button>
