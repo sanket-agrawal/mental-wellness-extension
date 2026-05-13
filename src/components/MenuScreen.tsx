@@ -3,11 +3,12 @@ import { RadialNode } from "./RadicalNodes"
 
 import {
   MessageCircle,
-  Brain,
   Timer,
   UserRound,
   Smile,
-  LogOut
+  LogOut,
+  Wind,
+  Music
 } from "lucide-react"
 
 import logo from "../assets/logo.png"
@@ -23,27 +24,33 @@ export const NODES = [
     icon: <MessageCircle size={20} strokeWidth={1.8} />
   },
   {
-    id: "meditate",
-    label: "Find Peace",
-    angle: -18,
-    icon: <Brain size={20} strokeWidth={1.8} />
+    id: "breathe",
+    label: "Breathe",
+    angle: -30,
+    icon: <Wind size={20} strokeWidth={1.8} />
   },
   {
     id: "pomodoro",
     label: "Stay Focused",
-    angle: 54,
+    angle: 30,
     icon: <Timer size={20} strokeWidth={1.8} />
+  },
+  {
+    id: "sound",
+    label: "Sound",
+    angle: 90,
+    icon: <Music size={20} strokeWidth={1.8} />
   },
   {
     id: "quote",
     label: "Lift Me Up",
-    angle: 126,
+    angle: 150,
     icon: <Smile size={20} strokeWidth={1.8} />
   },
   {
     id: "therapist",
     label: "Seek Help",
-    angle: 198,
+    angle: 210,
     url: "https://catalystcare.in/therapists",
     icon: <UserRound size={20} strokeWidth={1.8} />
   }
