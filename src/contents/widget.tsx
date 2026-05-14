@@ -4,14 +4,13 @@ import { renderToStaticMarkup } from "react-dom/server"
 import type { PlasmoCSConfig } from "plasmo"
 import {
   MessageCircle, Brain, Timer, Smile, UserRound,
-  Wind, Music, X, type LucideIcon
+  Wind, Music, type LucideIcon
 } from "lucide-react"
 import icon from "data-base64:~assets/icon.png"
 import AuthForm from "~src/components/auth/AuthForm"
 import { useAuthStore } from "~src/lib/hooks/useAuthStore"
 import { ChatScreen } from "~src/components/features/Ai/ChatScreen"
 
-// ─── Plasmo config ────────────────────────────────────────────────
 export const config: PlasmoCSConfig = { matches: ["<all_urls>"] }
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -20,7 +19,6 @@ import { SoundsScreen } from "~src/components/features/Sound"
 import { QuoteScreen } from "~src/components/features/Quote"
 import type { PomodoroMode } from "~src/lib/types"
 import { fmt } from "~src/lib/constants/contant"
-import { PomodoroScreen } from "~src/components/features/Pomodoro"
 
 const queryClient = new QueryClient()
 
@@ -45,35 +43,326 @@ const iconHtml = (Icon: LucideIcon, size = ICON_SIZE) =>
   renderToStaticMarkup(<Icon size={size} strokeWidth={1.6} />)
 
 const NODES = [
-  { id: "chat",      label: "Vent Out",   angle: 270, url: undefined as string | undefined, icon: iconHtml(MessageCircle) },
+  { id: "chat",     label: "Vent Out",  angle: 270, url: undefined as string | undefined, icon: iconHtml(MessageCircle) },
   {
-    id: "meditate",  label: "Meditate",   angle: 299, url: undefined as string | undefined, icon: iconHtml(Brain),
+    id: "meditate", label: "Meditate",  angle: 299, url: undefined as string | undefined, icon: iconHtml(Brain),
     subNodes: [
       { id: "breathe",  label: "Breathe",      angle: 279, icon: iconHtml(Wind,  SUB_ICON_SIZE) },
       { id: "sounds",   label: "Sounds",       angle: 307, icon: iconHtml(Music, SUB_ICON_SIZE) },
       { id: "pomodoro", label: "Stay Focused", angle: 335, icon: iconHtml(Timer, SUB_ICON_SIZE) },
-    ]
+    ],
   },
-  { id: "quote",     label: "Lift Me Up",  angle: 328, url: undefined as string | undefined, icon: iconHtml(Smile) },
-  { id: "therapist", label: "Seek Help",   angle: 357, url: "https://catalystcare.in/therapists", icon: iconHtml(UserRound) },
+  { id: "quote",     label: "Lift Me Up", angle: 328, url: undefined as string | undefined, icon: iconHtml(Smile) },
+  { id: "therapist", label: "Seek Help",  angle: 357, url: "https://catalystcare.in/therapists", icon: iconHtml(UserRound) },
 ]
 
 // ─── Event bus ───────────────────────────────────────────────────
-const CC_OPEN       = "cc:open-screen"
-const CC_CLOSE      = "cc:close-screen"
-const CC_POMO_TICK  = "cc:pomo-tick"
-const CC_OPEN_MENU  = "cc:open-menu"
+const CC_OPEN      = "cc:open-screen"
+const CC_CLOSE     = "cc:close-screen"
+const CC_POMO_TICK = "cc:pomo-tick"
+const CC_OPEN_MENU = "cc:open-menu"
 const dispatch = (name: string, detail?: unknown) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
 
 // ══════════════════════════════════════════════════════════════════
-//  OVERLAY SCREENS
+//  GLOBAL POMODORO TIMER  (outside React — survives minimize)
 // ══════════════════════════════════════════════════════════════════
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    ;[523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      const osc  = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.type = "sine"; osc.frequency.value = freq
+      const t = ctx.currentTime + i * 0.2
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.28, t + 0.06)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.7)
+      osc.start(t); osc.stop(t + 0.75)
+    })
+  } catch (e) { console.warn("Audio not available", e) }
+}
 
+interface GlobalPomoState {
+  timeLeft: number
+  running: boolean
+  mode: PomodoroMode
+  sessions: number
+  total: number
+}
+
+const _pomo: GlobalPomoState = {
+  timeLeft: 25 * 60,
+  running: false,
+  mode: "focus",
+  sessions: 0,
+  total: 25 * 60,
+}
+let _pomoItv: ReturnType<typeof setInterval> | null = null
+
+function pomoStop() {
+  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
+  _pomo.running = false
+  dispatch(CC_POMO_TICK, { ..._pomo })
+}
+
+function pomoStart() {
+  if (_pomoItv) clearInterval(_pomoItv)
+  _pomo.running = true
+  _pomoItv = setInterval(() => {
+    _pomo.timeLeft--
+    if (_pomo.timeLeft <= 0) {
+      _pomo.timeLeft = 0
+      clearInterval(_pomoItv!); _pomoItv = null
+      _pomo.running = false
+      if (_pomo.mode === "focus") _pomo.sessions++
+      playChime()
+    }
+    dispatch(CC_POMO_TICK, { ..._pomo })
+  }, 1000)
+  dispatch(CC_POMO_TICK, { ..._pomo })
+}
+
+function pomoReset() {
+  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
+  _pomo.running = false
+  _pomo.timeLeft = _pomo.total
+  dispatch(CC_POMO_TICK, { ..._pomo })
+}
+
+function pomoSetMode(mode: PomodoroMode, mins: number) {
+  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
+  _pomo.running = false
+  _pomo.mode = mode
+  _pomo.total = mins * 60
+  _pomo.timeLeft = _pomo.total
+  dispatch(CC_POMO_TICK, { ..._pomo })
+}
+
+function pomoSkip() {
+  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
+  _pomo.running = false
+  if (_pomo.mode === "focus") _pomo.sessions++
+  _pomo.timeLeft = _pomo.total
+  dispatch(CC_POMO_TICK, { ..._pomo })
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  POMODORO SCREEN  — top-level component (NOT nested inside Widget)
+// ══════════════════════════════════════════════════════════════════
+const POMO_LABELS = { focus: "Focus", short: "Short Break", long: "Long Break" }
+const CIRC_VAL    = 2 * Math.PI * 88
+
+function PomoIconBtn({
+  onClick, title, children,
+}: { onClick: () => void; title?: string; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        width: 44, height: 44, borderRadius: "50%",
+        border: "1.5px solid rgba(12,62,111,.14)",
+        background: "rgba(255,255,255,.88)", cursor: "pointer",
+        fontSize: 17, color: "#6a8fab",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "all .2s ease",
+        boxShadow: "0 2px 8px rgba(12,62,111,.08)", outline: "none",
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = "#fff"
+        e.currentTarget.style.color = "#0c3e6f"
+        e.currentTarget.style.boxShadow = "0 4px 16px rgba(12,62,111,.18)"
+        e.currentTarget.style.transform = "scale(1.06)"
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = "rgba(255,255,255,.88)"
+        e.currentTarget.style.color = "#6a8fab"
+        e.currentTarget.style.boxShadow = "0 2px 8px rgba(12,62,111,.08)"
+        e.currentTarget.style.transform = "scale(1)"
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function PomodoroScreen({
+  onBack,
+  onMinimize,
+}: {
+  onBack: () => void      // stops timer + closes
+  onMinimize: () => void  // only closes screen, timer keeps running
+}) {
+  const [localTimeLeft, setLocalTimeLeft] = useState(_pomo.timeLeft)
+  const [localRunning,  setLocalRunning]  = useState(_pomo.running)
+  const [localMode,     setLocalMode]     = useState<PomodoroMode>(_pomo.mode)
+  const [localSessions, setLocalSessions] = useState(_pomo.sessions)
+  const [customVal,     setCustomVal]     = useState("")
+  const [customMins,    setCustomMins]    = useState({
+    focus: Math.round(_pomo.total / 60) || 25,
+    short: 5,
+    long:  15,
+  })
+
+  // sync with global timer ticks while screen is open
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<GlobalPomoState>).detail
+      setLocalTimeLeft(d.timeLeft)
+      setLocalRunning(d.running)
+      setLocalMode(d.mode)
+      setLocalSessions(d.sessions)
+    }
+    window.addEventListener(CC_POMO_TICK, handler)
+    return () => window.removeEventListener(CC_POMO_TICK, handler)
+  }, [])
+
+  const progress  = _pomo.total > 0 ? (_pomo.total - localTimeLeft) / _pomo.total : 0
+  const ringColor = localMode === "focus" ? "#0c3e6f" : localMode === "short" ? "#16B7C2" : "#0a7080"
+  const dots      = Array.from({ length: 4 }, (_, i) => i < localSessions % 4)
+
+  const applyCustom = () => {
+    const v = parseInt(customVal)
+    if (!v || v < 1 || v > 99) return
+    setCustomMins(p => ({ ...p, [localMode]: v }))
+    pomoSetMode(localMode, v)
+    setCustomVal("")
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 440 }}>
+
+      {/* header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "18px 20px 14px", background: "#F8FBFF",
+        borderBottom: "1px solid rgba(12,62,111,.08)", flexShrink: 0,
+      }}>
+        <button
+          onClick={onBack}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#6a8fab", padding: "4px 0" }}
+        >← Back</button>
+
+        <span style={{ fontSize: 13, fontWeight: 500, color: "#0c3e6f" }}>Focus Timer</span>
+
+        <button
+          onClick={onMinimize}
+          title="Minimize — timer keeps running"
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#6a8fab", padding: "4px 8px", borderRadius: 6, lineHeight: 1, transition: "color .18s" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "#16B7C2")}
+          onMouseLeave={e => (e.currentTarget.style.color = "#6a8fab")}
+        >⌃</button>
+      </div>
+
+      {/* body */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px 24px 28px" }}>
+
+        {/* mode tabs */}
+        <div style={{ display: "flex", borderRadius: 10, padding: 3, background: "rgba(12,62,111,.07)", marginBottom: 26 }}>
+          {(["focus", "short", "long"] as PomodoroMode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => { setCustomMins(p => ({ ...p })); pomoSetMode(m, customMins[m]) }}
+              style={{
+                padding: "6px 13px", borderRadius: 7, fontSize: 11, border: "none", cursor: "pointer",
+                fontWeight: localMode === m ? 600 : 400,
+                background: localMode === m ? "#fff" : "transparent",
+                color: localMode === m ? "#0c3e6f" : "#6a8fab",
+                boxShadow: localMode === m ? "0 1px 4px rgba(12,62,111,.1)" : "none",
+                transition: "all .2s",
+              }}
+            >{POMO_LABELS[m]}</button>
+          ))}
+        </div>
+
+        {/* ring */}
+        <div style={{ position: "relative", width: 192, height: 192, marginBottom: 24 }}>
+          <svg width="192" height="192" viewBox="0 0 192 192" style={{ position: "absolute", inset: 0 }}>
+            <circle cx="96" cy="96" r="88" fill="none" stroke="rgba(12,62,111,.08)" strokeWidth="5" />
+            <circle
+              cx="96" cy="96" r="88" fill="none" stroke={ringColor} strokeWidth="5"
+              strokeLinecap="round"
+              strokeDasharray={CIRC_VAL}
+              strokeDashoffset={CIRC_VAL * (1 - progress)}
+              transform="rotate(-90 96 96)"
+              style={{ transition: localRunning ? "stroke-dashoffset 1s linear" : "stroke-dashoffset .3s ease" }}
+            />
+          </svg>
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ fontSize: 40, fontWeight: 300, letterSpacing: -2, lineHeight: 1, color: "#0c3e6f", fontVariantNumeric: "tabular-nums" }}>
+              {fmt(localTimeLeft)}
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 500, marginTop: 6, letterSpacing: "2px", textTransform: "uppercase", color: "#6a8fab" }}>
+              {POMO_LABELS[localMode]}
+            </div>
+          </div>
+        </div>
+
+        {/* controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+          <PomoIconBtn onClick={pomoReset} title="Reset">↺</PomoIconBtn>
+
+          <button
+            onClick={() => localRunning ? pomoStop() : pomoStart()}
+            style={{
+              width: 64, height: 64, borderRadius: "50%", border: "none",
+              background: localRunning ? "#16B7C2" : "#0c3e6f",
+              cursor: "pointer", fontSize: 22, color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all .25s cubic-bezier(.34,1.56,.64,1)",
+              boxShadow: localRunning
+                ? "0 6px 24px rgba(22,183,194,.45), 0 2px 8px rgba(22,183,194,.2)"
+                : "0 6px 24px rgba(12,62,111,.38), 0 2px 8px rgba(12,62,111,.18)",
+              outline: "none",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.09)" }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)" }}
+          >
+            {localRunning ? "⏸" : "▶"}
+          </button>
+
+          <PomoIconBtn onClick={pomoSkip} title="Skip session">⏭</PomoIconBtn>
+        </div>
+
+        {/* session dots */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+          <span style={{ fontSize: 10, color: "#8aadcc" }}>Sessions</span>
+          {dots.map((done, i) => (
+            <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: done ? "#0c3e6f" : "rgba(12,62,111,.12)", transition: "all .5s" }} />
+          ))}
+          <span style={{ fontSize: 10, color: "#8aadcc" }}>{localSessions} done</span>
+        </div>
+
+        {/* custom duration */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "#6a8fab" }}>Custom (min)</span>
+          <input
+            type="number" value={customVal}
+            onChange={e => setCustomVal(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && applyCustom()}
+            placeholder={String(customMins[localMode])}
+            style={{ width: 48, textAlign: "center", fontSize: 12, borderRadius: 8, padding: "5px", outline: "none", border: "1px solid rgba(12,62,111,.14)", background: "rgba(255,255,255,.85)", color: "#0c3e6f" }}
+          />
+          <button
+            onClick={applyCustom}
+            style={{ padding: "5px 14px", borderRadius: 8, fontSize: 11, border: "1px solid rgba(12,62,111,.18)", color: "#0c3e6f", background: "rgba(255,255,255,.75)", cursor: "pointer", fontWeight: 500, transition: "all .18s" }}
+            onMouseEnter={e => { e.currentTarget.style.background = "#0c3e6f"; e.currentTarget.style.color = "#fff" }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.75)"; e.currentTarget.style.color = "#0c3e6f" }}
+          >Set</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  OVERLAY SHELL
+// ══════════════════════════════════════════════════════════════════
 function OverlayShell({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   const [visible, setVisible] = useState(false)
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
-
   return (
     <div
       style={{
@@ -82,18 +371,14 @@ function OverlayShell({ onClose, children, wide }: { onClose: () => void; childr
         background: visible ? "rgba(8,28,58,.55)" : "rgba(8,28,58,0)",
         backdropFilter: visible ? "blur(6px)" : "blur(0px)",
         transition: "background .3s ease, backdrop-filter .3s ease",
-        pointerEvents: "auto",
-        isolation: "isolate",
+        pointerEvents: "auto", isolation: "isolate",
       }}
       onClick={onClose}
     >
       <div
         style={{
-          position: "relative",
-          width: wide ? 400 : 360,
-          maxHeight: "92vh",
-          borderRadius: 20,
-          background: "#EFF6FF",
+          position: "relative", width: wide ? 400 : 360, maxHeight: "92vh",
+          borderRadius: 20, background: "#EFF6FF",
           boxShadow: "0 32px 80px rgba(8,28,58,.38), 0 8px 24px rgba(8,28,58,.18)",
           overflow: "hidden",
           transform: visible ? "scale(1) translateY(0)" : "scale(.92) translateY(18px)",
@@ -109,21 +394,27 @@ function OverlayShell({ onClose, children, wide }: { onClose: () => void; childr
   )
 }
 
-function AuthScreen({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", maxHeight: "88vh", overflowY: "auto", minHeight: 500 }}>
-      <ErrorBoundary fallback={<div style={{padding: 20, color: "red", fontSize: 12}}>Auth failed to load. Check console.</div>}>
-        <AuthForm onSuccess={onSuccess} />
-      </ErrorBoundary>
-    </div>
-  )
-}
-
-class ErrorBoundary extends React.Component<{fallback: React.ReactNode, children: React.ReactNode}, {hasError: boolean}> {
+// ══════════════════════════════════════════════════════════════════
+//  AUTH SCREEN
+// ══════════════════════════════════════════════════════════════════
+class ErrorBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { hasError: boolean }
+> {
   state = { hasError: false }
   static getDerivedStateFromError() { return { hasError: true } }
   componentDidCatch(e: any) { console.error("AuthForm crashed:", e) }
   render() { return this.state.hasError ? this.props.fallback : this.props.children }
+}
+
+function AuthScreen({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", maxHeight: "88vh", overflowY: "auto", minHeight: 500 }}>
+      <ErrorBoundary fallback={<div style={{ padding: 20, color: "red", fontSize: 12 }}>Auth failed to load.</div>}>
+        <AuthForm onSuccess={onSuccess} />
+      </ErrorBoundary>
+    </div>
+  )
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -162,86 +453,52 @@ function injectGlobalStyles() {
       100% { opacity: 0 !important; transform: scale(0.18) translateY(8px) !important; }
     }
     @keyframes ccRipple {
-      0%   { box-shadow: 0 0 0 0 rgba(22,183,194,.45); }
-      70%  { box-shadow: 0 0 0 14px rgba(22,183,194,0); }
-      100% { box-shadow: 0 0 0 0 rgba(22,183,194,0); }
-    }
-    @keyframes ccDot {
-      0%   { transform: translateY(0);   opacity: .5; }
-      100% { transform: translateY(-4px); opacity: 1; }
-    }
-    @keyframes ccSoundBar {
-      0%   { height: 4px; }
-      100% { height: 14px; }
+      0%   { box-shadow: 0 0 0 0    rgba(22,183,194,.45); }
+      70%  { box-shadow: 0 0 0 14px rgba(22,183,194,0);   }
+      100% { box-shadow: 0 0 0 0    rgba(22,183,194,0);   }
     }
     #cc-fab {
       all: initial;
-      position: fixed !important;
-      bottom: 28px !important;
-      left: 28px !important;
-      width: 54px !important;
-      height: 54px !important;
-      border-radius: 100% !important;
-      cursor: pointer !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
+      position: fixed !important; bottom: 28px !important; left: 28px !important;
+      width: 54px !important; height: 54px !important; border-radius: 100% !important;
+      cursor: pointer !important; display: flex !important;
+      align-items: center !important; justify-content: center !important;
       box-shadow: 0 6px 24px rgba(12,62,111,.35), 0 2px 8px rgba(12,62,111,.18) !important;
       pointer-events: auto !important;
       transition: transform .35s cubic-bezier(.34,1.56,.64,1), background .3s ease !important;
       animation: ccPulse 2.4s ease infinite !important;
-      z-index: 2147483647 !important;
-      border: none !important;
-      background: #ffffff !important;
-      overflow: hidden !important;
+      z-index: 2147483647 !important; border: none !important;
+      background: #ffffff !important; overflow: hidden !important;
     }
     #cc-fab:hover { transform: scale(1.1) !important; }
     #cc-fab.cc-open { transform: rotate(45deg) scale(1.05) !important; animation: none !important; }
     #cc-fab.cc-pomo-active {
       background: #0c3e6f !important;
       animation: ccPomoRing 1.8s ease infinite !important;
-      width: 66px !important;
-      border-radius: 33px !important;
+      width: 66px !important; border-radius: 33px !important;
     }
     #cc-fab.cc-pomo-active:hover { transform: scale(1.06) !important; }
     #cc-fab-img {
-      width: 38px !important;
-      height: 38px !important;
-      object-fit: cover !important;
-      border-radius: 50% !important;
-      transition: opacity .25s ease, transform .25s ease !important;
+      width: 38px !important; height: 38px !important;
+      object-fit: cover !important; border-radius: 50% !important;
     }
     #cc-fab-timer {
-      display: none !important;
-      flex-direction: column !important;
-      align-items: center !important;
-      justify-content: center !important;
-      gap: 0px !important;
-      pointer-events: none !important;
+      display: none !important; flex-direction: column !important;
+      align-items: center !important; justify-content: center !important;
+      gap: 0px !important; pointer-events: none !important;
     }
-    #cc-fab.cc-pomo-active #cc-fab-img {
-      display: none !important;
-    }
-    #cc-fab.cc-pomo-active #cc-fab-timer {
-      display: flex !important;
-    }
+    #cc-fab.cc-pomo-active #cc-fab-img   { display: none !important; }
+    #cc-fab.cc-pomo-active #cc-fab-timer { display: flex !important; }
     #cc-fab-timer-label {
-      font-family: monospace !important;
-      font-size: 13px !important;
-      font-weight: 700 !important;
-      color: #fff !important;
-      letter-spacing: 0.5px !important;
-      line-height: 1 !important;
+      font-family: monospace !important; font-size: 13px !important;
+      font-weight: 700 !important; color: #fff !important;
+      letter-spacing: 0.5px !important; line-height: 1 !important;
     }
     #cc-fab-timer-mode {
       font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
-      font-size: 7px !important;
-      font-weight: 500 !important;
-      color: #16B7C2 !important;
-      letter-spacing: 1px !important;
-      text-transform: uppercase !important;
-      margin-top: 2px !important;
-      line-height: 1 !important;
+      font-size: 7px !important; font-weight: 500 !important;
+      color: #16B7C2 !important; letter-spacing: 1px !important;
+      text-transform: uppercase !important; margin-top: 2px !important; line-height: 1 !important;
     }
     .cc-ring {
       position: fixed !important; border-radius: 50% !important;
@@ -254,8 +511,7 @@ function injectGlobalStyles() {
     .cc-node {
       all: initial; position: fixed !important;
       width: ${NODE_SIZE}px !important; height: ${NODE_SIZE}px !important;
-      border-radius: 50% !important;
-      background: rgba(255,255,255,.97) !important;
+      border-radius: 50% !important; background: rgba(255,255,255,.97) !important;
       border: 1.5px solid rgba(12,62,111,.1) !important;
       box-shadow: 0 4px 16px rgba(12,62,111,.14) !important;
       display: flex !important; flex-direction: column !important;
@@ -287,8 +543,8 @@ function injectGlobalStyles() {
       gap: 5px !important; cursor: pointer !important;
       pointer-events: none !important; visibility: hidden !important; z-index: 2147483645 !important;
     }
-    .cc-sub-node.cc-sub-in { visibility: visible !important; pointer-events: auto !important; animation: ccSubIn .42s cubic-bezier(.34,1.56,.64,1) forwards !important; }
-    .cc-sub-node.cc-sub-out { visibility: visible !important; pointer-events: none !important; animation: ccSubOut .22s cubic-bezier(.4,0,1,1) forwards !important; }
+    .cc-sub-node.cc-sub-in    { visibility: visible !important; pointer-events: auto !important; animation: ccSubIn .42s cubic-bezier(.34,1.56,.64,1) forwards !important; }
+    .cc-sub-node.cc-sub-out   { visibility: visible !important; pointer-events: none !important; animation: ccSubOut .22s cubic-bezier(.4,0,1,1) forwards !important; }
     .cc-sub-node.cc-sub-float { visibility: visible !important; pointer-events: auto !important; animation: ccSubFloat var(--sf-dur,3.2s) var(--sf-off,0ms) ease-in-out infinite !important; }
     .cc-sub-node:hover { background: #16B7C2 !important; border-color: rgba(22,183,194,.7) !important; box-shadow: 0 6px 22px rgba(22,183,194,.42) !important; }
     .cc-sub-node:hover .cc-sub-ni { color: #fff !important; }
@@ -303,7 +559,7 @@ function injectGlobalStyles() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  FAB + RADIAL MENU  (vanilla JS — runs outside React tree)
+//  FAB + RADIAL MENU  (vanilla JS — outside React)
 // ══════════════════════════════════════════════════════════════════
 function initWidget(iconSrc: string) {
   if (document.getElementById("cc-fab")) return
@@ -324,19 +580,18 @@ function initWidget(iconSrc: string) {
   `
   document.body.appendChild(fab)
 
-  // ── Pomo tick ──
+  // update FAB from global pomo ticks
   window.addEventListener(CC_POMO_TICK, (e: Event) => {
-    const { timeLeft, running, mode } = (e as CustomEvent<{ timeLeft: number; running: boolean; mode: PomodoroMode }>).detail
+    const { timeLeft, running, mode } = (e as CustomEvent<GlobalPomoState>).detail
     const timerLabel = document.getElementById("cc-fab-timer-label")
     const timerMode  = document.getElementById("cc-fab-timer-mode")
     if (timerLabel) timerLabel.textContent = fmt(timeLeft)
-    if (timerMode)  timerMode.textContent  = mode === "focus" ? "Focus" : mode === "short" ? "Short Break" : "Long Break"
+    if (timerMode)  timerMode.textContent  =
+      mode === "focus" ? "Focus" : mode === "short" ? "Short Break" : "Long Break"
     if (running) {
-      fab.classList.add("cc-pomo-active")
-      fab.style.animation = "none"
+      fab.classList.add("cc-pomo-active"); fab.style.animation = "none"
     } else {
-      fab.classList.remove("cc-pomo-active")
-      fab.style.animation = ""
+      fab.classList.remove("cc-pomo-active"); fab.style.animation = ""
     }
   })
 
@@ -353,14 +608,13 @@ function initWidget(iconSrc: string) {
     subOpen = true
     mediateBtn.classList.add("cc-meditate-active")
     mediateBtn.classList.remove("cc-float")
-
-    const mr = mediateBtn.getBoundingClientRect()
+    const mr  = mediateBtn.getBoundingClientRect()
     const mcx = mr.left + mr.width / 2, mcy = mr.top + mr.height / 2
 
     nodeData.subNodes!.forEach((sn, i) => {
       const rad = (sn.angle * Math.PI) / 180
-      const sx = mcx + Math.cos(rad) * SUB_RADIUS - SUB_OFFSET
-      const sy = mcy + Math.sin(rad) * SUB_RADIUS - SUB_OFFSET
+      const sx  = mcx + Math.cos(rad) * SUB_RADIUS - SUB_OFFSET
+      const sy  = mcy + Math.sin(rad) * SUB_RADIUS - SUB_OFFSET
 
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement
       svg.setAttribute("class", "cc-sub-connector")
@@ -383,10 +637,7 @@ function initWidget(iconSrc: string) {
       btn.innerHTML = `<span class="cc-sub-ni">${sn.icon}</span><span class="cc-sub-nl">${sn.label}</span>`
       btn.addEventListener("mouseenter", () => { if (subCloseTimer) { clearTimeout(subCloseTimer); subCloseTimer = null } })
       btn.addEventListener("mouseleave", () => { subCloseTimer = setTimeout(closeSubNodes, 180) })
-      btn.addEventListener("click", e => {
-        e.stopPropagation(); closeSubNodes(); closeMenu()
-        openScreen(sn.id)
-      })
+      btn.addEventListener("click", e => { e.stopPropagation(); closeSubNodes(); closeMenu(); openScreen(sn.id) })
       document.body.appendChild(btn); subNodes.push(btn)
       setTimeout(() => {
         btn.classList.add("cc-sub-in")
@@ -428,15 +679,7 @@ function initWidget(iconSrc: string) {
     isOpen = true; fab.classList.add("cc-open")
     r1.classList.add("cc-vis"); r2.classList.add("cc-vis")
     bd = document.createElement("div"); bd.id = "cc-bd"
-
-    bd.addEventListener("click", () => {
-      if (subOpen) {
-        closeSubNodes()
-      } else {
-        closeMenu()
-      }
-    })
-
+    bd.addEventListener("click", () => { subOpen ? closeSubNodes() : closeMenu() })
     document.body.appendChild(bd)
 
     const fr = fab.getBoundingClientRect()
@@ -454,47 +697,29 @@ function initWidget(iconSrc: string) {
 
       if (node.id === "meditate" && node.subNodes) {
         meditateBtnRef = btn
-
-
         btn.addEventListener("mouseenter", () => {
           if (subCloseTimer) { clearTimeout(subCloseTimer); subCloseTimer = null }
-          if (!subOpen) {
-            subHoverTimer = setTimeout(() => {
-              if (meditateBtnRef) openSubNodes(meditateBtnRef, node as typeof NODES[1])
-            }, 220)
-          }
+          if (!subOpen) subHoverTimer = setTimeout(() => { if (meditateBtnRef) openSubNodes(meditateBtnRef, node as typeof NODES[1]) }, 220)
         })
-
         btn.addEventListener("mouseleave", () => {
           if (subHoverTimer) { clearTimeout(subHoverTimer); subHoverTimer = null }
-
-          if (!subOpen) {
-            subCloseTimer = setTimeout(closeSubNodes, 200)
-          }
+          if (!subOpen) subCloseTimer = setTimeout(closeSubNodes, 200)
         })
-
         btn.addEventListener("click", e => {
           e.stopPropagation()
-          if (subOpen) {
-            closeSubNodes()
-          } else {
-            if (meditateBtnRef) openSubNodes(meditateBtnRef, node as typeof NODES[1])
-          }
+          subOpen ? closeSubNodes() : (meditateBtnRef && openSubNodes(meditateBtnRef, node as typeof NODES[1]))
         })
-
-        return 
+        return
       }
 
       btn.addEventListener("click", e => {
-        e.stopPropagation()
-        closeMenu()
+        e.stopPropagation(); closeMenu()
         if (node.id === "therapist" && node.url) {
           ;(chrome as any).tabs?.create({ url: node.url }) ?? window.open(node.url, "_blank")
           return
         }
         openScreen(node.id)
       })
-
       document.body.appendChild(btn); nodes.push(btn)
       setTimeout(() => {
         Object.assign(btn.style, { transition: `transform .4s cubic-bezier(.34,1.56,.64,1) ${i * 55}ms, opacity .22s ease ${i * 55}ms`, transform: "scale(1)" })
@@ -503,10 +728,8 @@ function initWidget(iconSrc: string) {
       }, 10)
     })
 
-
     if (meditateBtnRef && !nodes.includes(meditateBtnRef)) {
-      document.body.appendChild(meditateBtnRef)
-      nodes.push(meditateBtnRef)
+      document.body.appendChild(meditateBtnRef); nodes.push(meditateBtnRef)
       const i = NODES.findIndex(n => n.id === "meditate")
       setTimeout(() => {
         Object.assign(meditateBtnRef!.style, { transition: `transform .4s cubic-bezier(.34,1.56,.64,1) ${i * 55}ms, opacity .22s ease ${i * 55}ms`, transform: "scale(1)" })
@@ -516,116 +739,85 @@ function initWidget(iconSrc: string) {
     }
   }
 
-
   window.addEventListener(CC_OPEN_MENU, openMenu)
 
   fab.addEventListener("click", () => {
     if (fab.classList.contains("cc-pomo-active")) {
-      dispatch(CC_OPEN, { screen: "pomodoro" })
-      return
+      dispatch(CC_OPEN, { screen: "pomodoro" }); return
     }
-
-    if (isOpen) {
-      closeSubNodes()
-      closeMenu()
-      return
-    }
- 
+    if (isOpen) { closeSubNodes(); closeMenu(); return }
     dispatch("cc:fab-clicked")
   })
 
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { closeSubNodes(); if (isOpen) closeMenu() } })
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closeSubNodes(); if (isOpen) closeMenu() }
+  })
 }
 
 // ══════════════════════════════════════════════════════════════════
 //  ROOT REACT COMPONENT
 // ══════════════════════════════════════════════════════════════════
-
 export default function Widget() {
   const [activeScreen, setActiveScreen] = useState<string | null>(null)
-  const [overlayRoot, setOverlayRoot] = useState<HTMLElement | null>(null)
+  const [overlayRoot,  setOverlayRoot]  = useState<HTMLElement | null>(null)
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
 
-  // Hydrate auth state from storage on mount
   useEffect(() => { hydrate() }, [])
-
   useEffect(() => {
     const el = document.getElementById("cc-root-container")
     if (el) setOverlayRoot(el)
   }, [])
+  useEffect(() => { initWidget(icon) }, [])
 
   useEffect(() => {
-    initWidget(icon)
-  }, [])
-
-  useEffect(() => {
-    // Handle FAB click: auth gate
     const onFabClick = () => {
-      console.log("fab clicked", { isHydrated, isAuthenticated })
-      if (!isHydrated) return // wait for hydration
-      if (!isAuthenticated) {
-        setActiveScreen("auth")
-      } else {
-        // Tell vanilla JS to open the radial menu
-        window.dispatchEvent(new CustomEvent("cc:open-menu"))
-      }
+      if (!isHydrated) return
+      if (!isAuthenticated) setActiveScreen("auth")
+      else window.dispatchEvent(new CustomEvent("cc:open-menu"))
     }
-
-    const onOpen = (e: Event) => {
+    const onOpen  = (e: Event) => {
       const screen = (e as CustomEvent<{ screen: string }>).detail?.screen
       if (screen) setActiveScreen(screen)
     }
     const onClose = () => setActiveScreen(null)
 
     window.addEventListener("cc:fab-clicked", onFabClick)
-    window.addEventListener(CC_OPEN, onOpen)
+    window.addEventListener(CC_OPEN,  onOpen)
     window.addEventListener(CC_CLOSE, onClose)
     return () => {
       window.removeEventListener("cc:fab-clicked", onFabClick)
-      window.removeEventListener(CC_OPEN, onOpen)
+      window.removeEventListener(CC_OPEN,  onOpen)
       window.removeEventListener(CC_CLOSE, onClose)
     }
   }, [isAuthenticated, isHydrated])
 
-  const close = () => {
-    setActiveScreen(null)
-    dispatch(CC_CLOSE)
-  }
+  const closeScreen    = () => { setActiveScreen(null); dispatch(CC_CLOSE) }
+  const minimizeScreen = () => setActiveScreen(null) // timer keeps running
 
-  // After successful auth: close auth overlay and open the radial menu
   const handleAuthSuccess = () => {
     setActiveScreen(null)
-    // Small delay so state updates propagate
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("cc:open-menu"))
-    }, 120)
+    setTimeout(() => window.dispatchEvent(new CustomEvent("cc:open-menu")), 120)
   }
 
   const screenEl = (() => {
     switch (activeScreen) {
       case "auth":
-        return <AuthScreen onSuccess={handleAuthSuccess} onClose={close} />
+        return <AuthScreen onSuccess={handleAuthSuccess} onClose={closeScreen} />
       case "chat":
-        return <ChatScreen onBack={close} />
+        return <ChatScreen onBack={closeScreen} />
       case "breathe":
-        return <BreatheScreen onBack={close} />
+        return <BreatheScreen onBack={closeScreen} />
       case "sounds":
-        return <SoundsScreen onBack={close} />
+        return <SoundsScreen onBack={closeScreen} />
       case "pomodoro":
         return (
           <PomodoroScreen
-            onBack={() => {
-              dispatch(CC_POMO_TICK, { timeLeft: 0, running: false, mode: "focus" })
-              close()
-            }}
-            onTick={(timeLeft, running, mode) => {
-              dispatch(CC_POMO_TICK, { timeLeft, running, mode })
-            }}
-            onMinimize={close}
+            onBack={() => { pomoStop(); closeScreen() }}
+            onMinimize={minimizeScreen}
           />
         )
       case "quote":
-        return <QuoteScreen onBack={close} />
+        return <QuoteScreen onBack={closeScreen} />
       default:
         return null
     }
@@ -634,14 +826,17 @@ export default function Widget() {
   if (!screenEl) return null
 
   const isAuthScreen = activeScreen === "auth"
+  // Pomodoro pe background click = minimize (timer chalta rahe)
+  const shellOnClose = activeScreen === "pomodoro" ? minimizeScreen : closeScreen
+
   return overlayRoot
     ? createPortal(
-      <QueryClientProvider client={queryClient}>
-        <OverlayShell onClose={close} wide={isAuthScreen}>
-         
-           {screenEl}
-        </OverlayShell>
-      </QueryClientProvider>,
-      overlayRoot
-    ) : null
+        <QueryClientProvider client={queryClient}>
+          <OverlayShell onClose={shellOnClose} wide={isAuthScreen}>
+            {screenEl}
+          </OverlayShell>
+        </QueryClientProvider>,
+        overlayRoot
+      )
+    : null
 }

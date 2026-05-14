@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { TopBar } from "~src/components/Topbar"
 import { useAuthStore } from "~src/lib/hooks/useAuthStore"
 import { useIsAuthenticated } from "~src/lib/hooks/Useisauthenticated"
@@ -177,7 +177,6 @@ const Sidebar = ({
 
   return (
     <>
-      {/* Overlay */}
       {open && (
         <div
           onClick={onClose}
@@ -190,7 +189,6 @@ const Sidebar = ({
         />
       )}
 
-      {/* Sidebar panel */}
       <div
         style={{
           position: "absolute", top: 0, left: 0, bottom: 0,
@@ -207,7 +205,6 @@ const Sidebar = ({
           pointerEvents: open ? "all" : "none",
         }}
       >
-        {/* Sidebar header */}
         <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid rgba(12,62,111,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img src={cc} alt="logo" style={{ width: 20, height: 20, opacity: 0.85 }} />
@@ -225,7 +222,6 @@ const Sidebar = ({
           </button>
         </div>
 
-        {/* New chat button */}
         <div style={{ padding: "10px 12px 8px" }}>
           <button
             onClick={() => { onNewChat(); onClose() }}
@@ -254,7 +250,6 @@ const Sidebar = ({
           </button>
         </div>
 
-        {/* Sessions list */}
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px 12px", scrollbarWidth: "none" }}>
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 4px" }}>
@@ -357,12 +352,12 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sessionId = useRef<string | null>(null)
   const sessionPromise = useRef<Promise<string> | null>(null)
-  const activeSessionId = sessionId.current
 
   const scrollBottom = () =>
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80)
@@ -373,6 +368,39 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 96) + "px"
     }
   }, [input])
+
+
+  useEffect(() => {
+    createSession().catch(err => console.error("Initial session create error:", err))
+  }, [])
+
+  const createSession = useCallback((): Promise<string> => {
+    if (sessionId.current) return Promise.resolve(sessionId.current)
+    if (sessionPromise.current) return sessionPromise.current
+
+    sessionPromise.current = fetch(SESSION_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`Session create failed: ${res.status}`)
+        return res.json()
+      })
+      .then(json => {
+        const id = json.data?.sessionId as string
+        if (!id) throw new Error("No sessionId in response")
+        sessionId.current = id
+        // ── FIX: state update karo taaki sidebar highlight sahi ho ──
+        setActiveSessionId(id)
+        return id
+      })
+      .catch(err => {
+        sessionPromise.current = null
+        throw err
+      })
+
+    return sessionPromise.current
+  }, [authToken])
 
   // ─── Fetch all sessions for sidebar ───────────────────────────────────────
   const fetchSessions = async () => {
@@ -398,7 +426,6 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     })
     if (!res.ok) throw new Error("Failed to fetch session messages")
     const json = await res.json()
-    // Map API messages to local format (adjust fields as per your API shape)
     const raw: Array<{ role: string; content: string; id?: string }> = json.data || []
     return raw.map((m, i) => ({
       id: m.id || `${sid}-${i}`,
@@ -415,9 +442,9 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
 
   // ─── Select a past session ────────────────────────────────────────────────
   const handleSelectSession = async (s: Session) => {
-    // Reset current session
     sessionId.current = s.sessionId
     sessionPromise.current = Promise.resolve(s.sessionId)
+    setActiveSessionId(s.sessionId)
     setMessages([INIT_MSG])
     setShowPrompts(false)
     setError(null)
@@ -440,40 +467,22 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
   const handleNewChat = () => {
     sessionId.current = null
     sessionPromise.current = null
+    setActiveSessionId(null)
     setMessages([INIT_MSG])
     setInput("")
     setShowPrompts(true)
     setError(null)
     setTyping(false)
-  }
-
-  // ─── Create session ───────────────────────────────────────────────────────
-  const createSession = (): Promise<string> => {
-    if (sessionId.current) return Promise.resolve(sessionId.current)
-    if (sessionPromise.current) return sessionPromise.current
-    sessionPromise.current = fetch(SESSION_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-    })
-      .then(res => { if (!res.ok) throw new Error(`Session create failed: ${res.status}`); return res.json() })
-      .then(json => {
-        const id = json.data?.sessionId as string
-        if (!id) throw new Error("No sessionId in response")
-        sessionId.current = id
-        return id
-      })
-      .catch(err => { sessionPromise.current = null; throw err })
-    return sessionPromise.current
+    createSession().catch(err => console.error("New chat session create error:", err))
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
-    if (e.target.value.length > 0 && !sessionId.current && !sessionPromise.current) {
-      createSession().catch(err => console.error("Early session create error:", err))
-    }
   }
 
+  // ─── Fetch AI reply ───────────────────────────────────────────────────────
   const fetchAIReply = async (message: string): Promise<string> => {
+    // ── FIX: session guaranteed hai (mount par ban chuki), bas await karo ──
     const sid = await createSession()
     const response = await fetch(VENT_API_URL, {
       method: "POST",
@@ -486,6 +495,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     return json.data.reply as string
   }
 
+  // ─── Send ─────────────────────────────────────────────────────────────────
   const send = async (text: string) => {
     if (!text.trim() || typing) return
     setMessages(p => [...p, { id: Date.now() + "u", role: "user", text: text.trim() }])
@@ -518,7 +528,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
         onClose={() => setSidebarOpen(false)}
         sessions={sessions}
         loading={sessionsLoading}
-        activeSessionId={sessionId.current}
+        activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
       />
@@ -526,7 +536,6 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
       {/* TopBar with history button */}
       <div style={{ position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "center" }}>
-          {/* History icon button */}
           <button
             onClick={handleOpenSidebar}
             title="Past conversations"
