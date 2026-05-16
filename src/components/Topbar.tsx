@@ -32,24 +32,7 @@ export function TopBar({
         {title}
       </span>
 
-      {/* Right Back Button */}
-      <button
-        onClick={onBack}
-        style={{
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontSize: 13,
-          fontWeight: 500,
-          color: "#6a8fab",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: 0,
-        }}
-      >
-        Back →
-      </button>
+      
     </div>
   )
 }
