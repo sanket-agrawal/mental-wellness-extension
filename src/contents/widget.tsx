@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { renderToStaticMarkup } from "react-dom/server"
 import type { PlasmoCSConfig } from "plasmo"
@@ -10,15 +10,15 @@ import icon from "data-base64:~assets/icon.png"
 import AuthForm from "~src/components/auth/AuthForm"
 import { useAuthStore } from "~src/lib/hooks/useAuthStore"
 import { ChatScreen } from "~src/components/features/Ai/ChatScreen"
-
-export const config: PlasmoCSConfig = { matches: ["<all_urls>"] }
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { BreatheScreen } from "~src/components/features/Meditation"
 import { SoundsScreen } from "~src/components/features/Sound"
 import { QuoteScreen } from "~src/components/features/Quote"
-import type { PomodoroMode } from "~src/lib/types"
-import { fmt } from "~src/lib/constants/contant"
+import { PomodoroScreen } from "~src/components/features/Pomodoro"
+import { pomoTimer } from "~src/lib/helpers/pomodoroTimer"
+import { QUOTES } from "~src/lib/constants/contant"
+
+export const config: PlasmoCSConfig = { matches: ["<all_urls>"] }
 
 const queryClient = new QueryClient()
 
@@ -35,20 +35,20 @@ export const getRootContainer = () =>
     else document.addEventListener("DOMContentLoaded", inject, { once: true })
   })
 
-// ─── Layout constants ─────────────────────────────────────────────
-const NODE_SIZE = 160, ICON_SIZE = 38, LABEL_WIDTH = 238, OFFSET = 80, RADIUS = 140
+// ─── Layout constants ─────────────────────────────────────────────────────────
+const NODE_SIZE = 180, ICON_SIZE = 38, LABEL_WIDTH = 238, OFFSET = 80, RADIUS = 130
 const SUB_NODE_SIZE = 52, SUB_ICON_SIZE = 14, SUB_LABEL_WIDTH = 44, SUB_OFFSET = 26, SUB_RADIUS = 130
 
 const iconHtml = (Icon: LucideIcon, size = ICON_SIZE) =>
   renderToStaticMarkup(<Icon size={size} strokeWidth={1.6} />)
 
 const NODES = [
-  { id: "chat",     label: "Vent Out",  angle: 270, url: undefined as string | undefined, icon: iconHtml(MessageCircle) },
+  { id: "chat",     label: "Vent Out",   angle: 270, url: undefined as string | undefined, icon: iconHtml(MessageCircle) },
   {
-    id: "meditate", label: "Meditate",  angle: 299, url: undefined as string | undefined, icon: iconHtml(Brain),
+    id: "meditate", label: "Productivity",   angle: 299, url: undefined as string | undefined, icon: iconHtml(Brain),
     subNodes: [
       { id: "breathe",  label: "Breathe",      angle: 279, icon: iconHtml(Wind,  SUB_ICON_SIZE) },
-      { id: "sounds",   label: "Sounds",       angle: 307, icon: iconHtml(Music, SUB_ICON_SIZE) },
+      { id: "sounds",   label: "Meditate",       angle: 307, icon: iconHtml(Music, SUB_ICON_SIZE) },
       { id: "pomodoro", label: "Stay Focused", angle: 335, icon: iconHtml(Timer, SUB_ICON_SIZE) },
     ],
   },
@@ -56,370 +56,397 @@ const NODES = [
   { id: "therapist", label: "Seek Help",  angle: 357, url: "https://catalystcare.in/therapists", icon: iconHtml(UserRound) },
 ]
 
-// ─── Event bus ───────────────────────────────────────────────────
-const CC_OPEN      = "cc:open-screen"
-const CC_CLOSE     = "cc:close-screen"
-const CC_POMO_TICK = "cc:pomo-tick"
-const CC_OPEN_MENU = "cc:open-menu"
+// ─── Event bus ───────────────────────────────────────────────────────────────
+const CC_OPEN       = "cc:open-screen"
+const CC_CLOSE      = "cc:close-screen"
+const CC_OPEN_MENU  = "cc:open-menu"
+const CC_AUTO_QUOTE = "cc:auto-quote"
 const dispatch = (name: string, detail?: unknown) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
 
-// ══════════════════════════════════════════════════════════════════
-//  GLOBAL POMODORO TIMER  (outside React — survives minimize)
-// ══════════════════════════════════════════════════════════════════
-function playChime() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-    ;[523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-      const osc  = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain); gain.connect(ctx.destination)
-      osc.type = "sine"; osc.frequency.value = freq
-      const t = ctx.currentTime + i * 0.2
-      gain.gain.setValueAtTime(0, t)
-      gain.gain.linearRampToValueAtTime(0.28, t + 0.06)
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.7)
-      osc.start(t); osc.stop(t + 0.75)
-    })
-  } catch (e) { console.warn("Audio not available", e) }
+// ─── Auto-quote scheduler ────────────────────────────────────────────────────
+const AUTO_QUOTE_INTERVAL_MS = 30 * 1000
+let _autoQuoteItv: ReturnType<typeof setInterval> | null = null
+
+function startAutoQuoteScheduler() {
+  if (_autoQuoteItv) return
+  _autoQuoteItv = setInterval(() => dispatch(CC_AUTO_QUOTE), AUTO_QUOTE_INTERVAL_MS)
 }
 
-interface GlobalPomoState {
-  timeLeft: number
-  running: boolean
-  mode: PomodoroMode
-  sessions: number
-  total: number
+// ─── Format mm:ss ─────────────────────────────────────────────────────────────
+function fmt(s: number) {
+  const m = Math.floor(s / 60)
+  const sc = s % 60
+  return String(m).padStart(2, "0") + ":" + String(sc).padStart(2, "0")
 }
 
-const _pomo: GlobalPomoState = {
-  timeLeft: 25 * 60,
-  running: false,
-  mode: "focus",
-  sessions: 0,
-  total: 25 * 60,
-}
-let _pomoItv: ReturnType<typeof setInterval> | null = null
+// ══════════════════════════════════════════════════════════════════════════════
+//  PERSISTENT FAB-LEVEL POMO TOAST
+//  Always mounted in Widget root — survives screen open/close/minimize.
+//  Listens to cc:pomo-toast and renders above the FAB button.
+// ══════════════════════════════════════════════════════════════════════════════
+const FAB_BOTTOM = 28
+const FAB_LEFT   = 28
+const FAB_SIZE   = 54
 
-function pomoStop() {
-  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
-  _pomo.running = false
-  dispatch(CC_POMO_TICK, { ..._pomo })
-}
+function PomoToastBubble() {
+  const [toast,        setToast]   = useState<{ message: string; sub?: string; countdown?: number } | null>(null)
+  const [visible,      setVisible] = useState(false)
+  const [countdown,    setCountdown] = useState<number | null>(null)
+  const hideTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const countdownRef   = useRef<ReturnType<typeof setInterval> | null>(null)
 
-function pomoStart() {
-  if (_pomoItv) clearInterval(_pomoItv)
-  _pomo.running = true
-  _pomoItv = setInterval(() => {
-    _pomo.timeLeft--
-    if (_pomo.timeLeft <= 0) {
-      _pomo.timeLeft = 0
-      clearInterval(_pomoItv!); _pomoItv = null
-      _pomo.running = false
-      if (_pomo.mode === "focus") _pomo.sessions++
-      playChime()
-    }
-    dispatch(CC_POMO_TICK, { ..._pomo })
-  }, 1000)
-  dispatch(CC_POMO_TICK, { ..._pomo })
-}
-
-function pomoReset() {
-  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
-  _pomo.running = false
-  _pomo.timeLeft = _pomo.total
-  dispatch(CC_POMO_TICK, { ..._pomo })
-}
-
-function pomoSetMode(mode: PomodoroMode, mins: number) {
-  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
-  _pomo.running = false
-  _pomo.mode = mode
-  _pomo.total = mins * 60
-  _pomo.timeLeft = _pomo.total
-  dispatch(CC_POMO_TICK, { ..._pomo })
-}
-
-function pomoSkip() {
-  if (_pomoItv) { clearInterval(_pomoItv); _pomoItv = null }
-  _pomo.running = false
-  if (_pomo.mode === "focus") _pomo.sessions++
-  _pomo.timeLeft = _pomo.total
-  dispatch(CC_POMO_TICK, { ..._pomo })
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  POMODORO SCREEN  — top-level component (NOT nested inside Widget)
-// ══════════════════════════════════════════════════════════════════
-const POMO_LABELS = { focus: "Focus", short: "Short Break", long: "Long Break" }
-const CIRC_VAL    = 2 * Math.PI * 88
-
-function PomoIconBtn({
-  onClick, title, children,
-}: { onClick: () => void; title?: string; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        width: 44, height: 44, borderRadius: "50%",
-        border: "1.5px solid rgba(12,62,111,.14)",
-        background: "rgba(255,255,255,.88)", cursor: "pointer",
-        fontSize: 17, color: "#6a8fab",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        transition: "all .2s ease",
-        boxShadow: "0 2px 8px rgba(12,62,111,.08)", outline: "none",
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = "#fff"
-        e.currentTarget.style.color = "#0c3e6f"
-        e.currentTarget.style.boxShadow = "0 4px 16px rgba(12,62,111,.18)"
-        e.currentTarget.style.transform = "scale(1.06)"
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = "rgba(255,255,255,.88)"
-        e.currentTarget.style.color = "#6a8fab"
-        e.currentTarget.style.boxShadow = "0 2px 8px rgba(12,62,111,.08)"
-        e.currentTarget.style.transform = "scale(1)"
-      }}
-    >
-      {children}
-    </button>
-  )
-}
-
-function PomodoroScreen({
-  onBack,
-  onMinimize,
-}: {
-  onBack: () => void      // stops timer + closes
-  onMinimize: () => void  // only closes screen, timer keeps running
-}) {
-  const [localTimeLeft, setLocalTimeLeft] = useState(_pomo.timeLeft)
-  const [localRunning,  setLocalRunning]  = useState(_pomo.running)
-  const [localMode,     setLocalMode]     = useState<PomodoroMode>(_pomo.mode)
-  const [localSessions, setLocalSessions] = useState(_pomo.sessions)
-  const [customVal,     setCustomVal]     = useState("")
-  const [customMins,    setCustomMins]    = useState({
-    focus: Math.round(_pomo.total / 60) || 25,
-    short: 5,
-    long:  15,
-  })
-
-  // sync with global timer ticks while screen is open
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const d = (e as CustomEvent<GlobalPomoState>).detail
-      setLocalTimeLeft(d.timeLeft)
-      setLocalRunning(d.running)
-      setLocalMode(d.mode)
-      setLocalSessions(d.sessions)
-    }
-    window.addEventListener(CC_POMO_TICK, handler)
-    return () => window.removeEventListener(CC_POMO_TICK, handler)
+  const dismiss = useCallback(() => {
+    if (hideTimerRef.current)  clearTimeout(hideTimerRef.current)
+    if (countdownRef.current)  clearInterval(countdownRef.current)
+    setVisible(false)
+    setCountdown(null)
+    setTimeout(() => setToast(null), 380)
   }, [])
 
-  const progress  = _pomo.total > 0 ? (_pomo.total - localTimeLeft) / _pomo.total : 0
-  const ringColor = localMode === "focus" ? "#0c3e6f" : localMode === "short" ? "#16B7C2" : "#0a7080"
-  const dots      = Array.from({ length: 4 }, (_, i) => i < localSessions % 4)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { message, sub, countdown: cd } = (e as CustomEvent<{ message: string; sub?: string; countdown?: number }>).detail
 
-  const applyCustom = () => {
-    const v = parseInt(customVal)
-    if (!v || v < 1 || v > 99) return
-    setCustomMins(p => ({ ...p, [localMode]: v }))
-    pomoSetMode(localMode, v)
-    setCustomVal("")
-  }
+      if (hideTimerRef.current)  clearTimeout(hideTimerRef.current)
+      if (countdownRef.current)  clearInterval(countdownRef.current)
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 440 }}>
+      setToast({ message, sub, countdown: cd })
+      setCountdown(cd ?? null)
+      requestAnimationFrame(() => setVisible(true))
 
-      {/* header */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "18px 20px 14px", background: "#F8FBFF",
-        borderBottom: "1px solid rgba(12,62,111,.08)", flexShrink: 0,
-      }}>
-        <button
-          onClick={onBack}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#6a8fab", padding: "4px 0" }}
-        >← Back</button>
+      // If there's a countdown, tick it down
+      if (cd && cd > 0) {
+        let remaining = cd
+        countdownRef.current = setInterval(() => {
+          remaining--
+          setCountdown(remaining)
+          if (remaining <= 0) {
+            clearInterval(countdownRef.current!)
+            countdownRef.current = null
+          }
+        }, 1000)
+      }
 
-        <span style={{ fontSize: 13, fontWeight: 500, color: "#0c3e6f" }}>Focus Timer</span>
+      // Auto-hide after max(4s, cd+1s)
+      const hideAfter = cd ? (cd + 1) * 1000 : 4000
+      hideTimerRef.current = setTimeout(() => {
+        setVisible(false)
+        setCountdown(null)
+        setTimeout(() => setToast(null), 380)
+      }, hideAfter)
+    }
 
-        <button
-          onClick={onMinimize}
-          title="Minimize — timer keeps running"
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#6a8fab", padding: "4px 8px", borderRadius: 6, lineHeight: 1, transition: "color .18s" }}
-          onMouseEnter={e => (e.currentTarget.style.color = "#16B7C2")}
-          onMouseLeave={e => (e.currentTarget.style.color = "#6a8fab")}
-        >⌃</button>
-      </div>
+    window.addEventListener("cc:pomo-toast", handler)
+    return () => {
+      window.removeEventListener("cc:pomo-toast", handler)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
+  }, [])
 
-      {/* body */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px 24px 28px" }}>
+  if (!toast) return null
 
-        {/* mode tabs */}
-        <div style={{ display: "flex", borderRadius: 10, padding: 3, background: "rgba(12,62,111,.07)", marginBottom: 26 }}>
-          {(["focus", "short", "long"] as PomodoroMode[]).map(m => (
-            <button
-              key={m}
-              onClick={() => { setCustomMins(p => ({ ...p })); pomoSetMode(m, customMins[m]) }}
-              style={{
-                padding: "6px 13px", borderRadius: 7, fontSize: 11, border: "none", cursor: "pointer",
-                fontWeight: localMode === m ? 600 : 400,
-                background: localMode === m ? "#fff" : "transparent",
-                color: localMode === m ? "#0c3e6f" : "#6a8fab",
-                boxShadow: localMode === m ? "0 1px 4px rgba(12,62,111,.1)" : "none",
-                transition: "all .2s",
-              }}
-            >{POMO_LABELS[m]}</button>
-          ))}
-        </div>
-
-        {/* ring */}
-        <div style={{ position: "relative", width: 192, height: 192, marginBottom: 24 }}>
-          <svg width="192" height="192" viewBox="0 0 192 192" style={{ position: "absolute", inset: 0 }}>
-            <circle cx="96" cy="96" r="88" fill="none" stroke="rgba(12,62,111,.08)" strokeWidth="5" />
-            <circle
-              cx="96" cy="96" r="88" fill="none" stroke={ringColor} strokeWidth="5"
-              strokeLinecap="round"
-              strokeDasharray={CIRC_VAL}
-              strokeDashoffset={CIRC_VAL * (1 - progress)}
-              transform="rotate(-90 96 96)"
-              style={{ transition: localRunning ? "stroke-dashoffset 1s linear" : "stroke-dashoffset .3s ease" }}
-            />
-          </svg>
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ fontSize: 40, fontWeight: 300, letterSpacing: -2, lineHeight: 1, color: "#0c3e6f", fontVariantNumeric: "tabular-nums" }}>
-              {fmt(localTimeLeft)}
-            </div>
-            <div style={{ fontSize: 10, fontWeight: 500, marginTop: 6, letterSpacing: "2px", textTransform: "uppercase", color: "#6a8fab" }}>
-              {POMO_LABELS[localMode]}
-            </div>
-          </div>
-        </div>
-
-        {/* controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-          <PomoIconBtn onClick={pomoReset} title="Reset">↺</PomoIconBtn>
-
-          <button
-            onClick={() => localRunning ? pomoStop() : pomoStart()}
-            style={{
-              width: 64, height: 64, borderRadius: "50%", border: "none",
-              background: localRunning ? "#16B7C2" : "#0c3e6f",
-              cursor: "pointer", fontSize: 22, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all .25s cubic-bezier(.34,1.56,.64,1)",
-              boxShadow: localRunning
-                ? "0 6px 24px rgba(22,183,194,.45), 0 2px 8px rgba(22,183,194,.2)"
-                : "0 6px 24px rgba(12,62,111,.38), 0 2px 8px rgba(12,62,111,.18)",
-              outline: "none",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.09)" }}
-            onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)" }}
-          >
-            {localRunning ? "⏸" : "▶"}
-          </button>
-
-          <PomoIconBtn onClick={pomoSkip} title="Skip session">⏭</PomoIconBtn>
-        </div>
-
-        {/* session dots */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-          <span style={{ fontSize: 10, color: "#8aadcc" }}>Sessions</span>
-          {dots.map((done, i) => (
-            <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: done ? "#0c3e6f" : "rgba(12,62,111,.12)", transition: "all .5s" }} />
-          ))}
-          <span style={{ fontSize: 10, color: "#8aadcc" }}>{localSessions} done</span>
-        </div>
-
-        {/* custom duration */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, color: "#6a8fab" }}>Custom (min)</span>
-          <input
-            type="number" value={customVal}
-            onChange={e => setCustomVal(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && applyCustom()}
-            placeholder={String(customMins[localMode])}
-            style={{ width: 48, textAlign: "center", fontSize: 12, borderRadius: 8, padding: "5px", outline: "none", border: "1px solid rgba(12,62,111,.14)", background: "rgba(255,255,255,.85)", color: "#0c3e6f" }}
-          />
-          <button
-            onClick={applyCustom}
-            style={{ padding: "5px 14px", borderRadius: 8, fontSize: 11, border: "1px solid rgba(12,62,111,.18)", color: "#0c3e6f", background: "rgba(255,255,255,.75)", cursor: "pointer", fontWeight: 500, transition: "all .18s" }}
-            onMouseEnter={e => { e.currentTarget.style.background = "#0c3e6f"; e.currentTarget.style.color = "#fff" }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.75)"; e.currentTarget.style.color = "#0c3e6f" }}
-          >Set</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  OVERLAY SHELL
-// ══════════════════════════════════════════════════════════════════
-function OverlayShell({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
-  const [visible, setVisible] = useState(false)
-  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
   return (
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 2147483646,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: visible ? "rgba(8,28,58,.55)" : "rgba(8,28,58,0)",
-        backdropFilter: visible ? "blur(6px)" : "blur(0px)",
-        transition: "background .3s ease, backdrop-filter .3s ease",
-        pointerEvents: "auto", isolation: "isolate",
+        position:   "fixed",
+        bottom:     FAB_BOTTOM + FAB_SIZE + 14,
+        left:       FAB_LEFT,
+        width:      252,
+        zIndex:     2147483648,
+        pointerEvents: "auto",
+        transform:  visible ? "translateY(0) scale(1)" : "translateY(16px) scale(.93)",
+        opacity:    visible ? 1 : 0,
+        transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease",
       }}
-      onClick={onClose}
     >
-      <div
-        style={{
-          position: "relative", width: wide ? 400 : 360, maxHeight: "92vh",
-          borderRadius: 20, background: "#EFF6FF",
-          boxShadow: "0 32px 80px rgba(8,28,58,.38), 0 8px 24px rgba(8,28,58,.18)",
-          overflow: "hidden",
-          transform: visible ? "scale(1) translateY(0)" : "scale(.92) translateY(18px)",
-          opacity: visible ? 1 : 0,
-          transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease",
-          display: "flex", flexDirection: "column",
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {children}
+      {/* Arrow pointing down toward FAB */}
+      <div style={{ position: "absolute", bottom: -7, left: 20, width: 14, height: 8, overflow: "hidden" }}>
+        <div style={{
+          width: 14, height: 14,
+          background: "#0c3e6f",
+          transform: "rotate(45deg) translateY(-7px)",
+          boxShadow: "2px 2px 6px rgba(8,28,58,.18)",
+        }} />
+      </div>
+
+      <div style={{
+        borderRadius:         16,
+        background:           "linear-gradient(135deg, #0c3e6f 0%, #0a5080 100%)",
+        backdropFilter:       "blur(20px) saturate(1.4)",
+        WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+        boxShadow:            "0 12px 40px rgba(8,28,58,.32), 0 0 0 1px rgba(22,183,194,.22)",
+        padding:              "12px 14px 11px",
+        position:             "relative",
+      }}>
+
+        {/* Dismiss × */}
+        <button
+          onClick={dismiss}
+          style={{
+            position: "absolute", top: 7, right: 8,
+            width: 20, height: 20, borderRadius: 6,
+            border: "none", background: "transparent",
+            cursor: "pointer", fontSize: 13,
+            color: "rgba(22,183,194,.65)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 0, lineHeight: 1,
+          }}
+        >×</button>
+
+        {/* Message */}
+        <p style={{
+          margin: "0 24px 6px 0",
+          fontSize: 12.5, fontWeight: 600,
+          lineHeight: 1.5, color: "#fff",
+          letterSpacing: "0.01em",
+        }}>
+          {toast.message}
+        </p>
+
+        {/* Sub row: text + bare countdown number */}
+        {(toast.sub || countdown !== null) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {toast.sub && (
+              <span style={{
+                fontSize: 10.5,
+                color: "rgba(22,183,194,.85)",
+                fontWeight: 400,
+                letterSpacing: "0.02em",
+              }}>
+                {toast.sub}
+              </span>
+            )}
+            {countdown !== null && (
+              <span style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: countdown <= 1 ? "#ff9f7a" : "#16B7C2",
+                fontVariantNumeric: "tabular-nums",
+                transition: "color .3s ease",
+                lineHeight: 1,
+              }}>
+                {countdown}s
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  AUTH SCREEN
-// ══════════════════════════════════════════════════════════════════
-class ErrorBoundary extends React.Component<
-  { fallback: React.ReactNode; children: React.ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false }
-  static getDerivedStateFromError() { return { hasError: true } }
-  componentDidCatch(e: any) { console.error("AuthForm crashed:", e) }
-  render() { return this.state.hasError ? this.props.fallback : this.props.children }
-}
+// ══════════════════════════════════════════════════════════════════════════════
+//  FAB init — subscribes to pomoTimer to update FAB label & style
+// ══════════════════════════════════════════════════════════════════════════════
+function initWidget(iconSrc: string) {
+  if (document.getElementById("cc-fab")) return
+  injectGlobalStyles()
 
-function AuthScreen({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", maxHeight: "88vh", overflowY: "auto", minHeight: 500 }}>
-      <ErrorBoundary fallback={<div style={{ padding: 20, color: "red", fontSize: 12 }}>Auth failed to load.</div>}>
-        <AuthForm onSuccess={onSuccess} />
-      </ErrorBoundary>
+  const r1 = Object.assign(document.createElement("div"), { className: "cc-ring", id: "cc-r1" })
+  const r2 = Object.assign(document.createElement("div"), { className: "cc-ring", id: "cc-r2" })
+  document.body.append(r1, r2)
+
+  const fab = document.createElement("button")
+  fab.id = "cc-fab"
+  fab.innerHTML = `
+    <img id="cc-fab-img" src="${iconSrc}" alt="logo" />
+    <div id="cc-fab-timer">
+      <span id="cc-fab-timer-label">25:00</span>
+      <span id="cc-fab-timer-mode">Focus</span>
     </div>
-  )
+  `
+  document.body.appendChild(fab)
+
+  startAutoQuoteScheduler()
+
+  // Subscribe to global timer — updates FAB live, survives screen open/close
+  pomoTimer.subscribe(({ timeLeft, running, mode }) => {
+    const timerLabel = document.getElementById("cc-fab-timer-label")
+    const timerMode  = document.getElementById("cc-fab-timer-mode")
+    if (timerLabel) timerLabel.textContent = fmt(timeLeft)
+    if (timerMode)  timerMode.textContent  =
+      mode === "focus" ? "Focus" : mode === "short" ? "Short Break" : "Long Break"
+    if (running) {
+      fab.classList.add("cc-pomo-active")
+    } else {
+      fab.classList.remove("cc-pomo-active")
+    }
+  })
+
+  let isOpen = false, nodes: HTMLButtonElement[] = [], bd: HTMLElement | null = null
+  let subNodes: HTMLButtonElement[] = [], subConnectors: SVGSVGElement[] = []
+  let subHoverTimer: ReturnType<typeof setTimeout> | null = null
+  let subCloseTimer: ReturnType<typeof setTimeout> | null = null
+  let subOpen = false, meditateBtnRef: HTMLButtonElement | null = null
+
+  const openScreen = (screen: string) => dispatch(CC_OPEN, { screen })
+
+  const openSubNodes = (mediateBtn: HTMLButtonElement, nodeData: typeof NODES[1]) => {
+    if (subOpen) return
+    subOpen = true
+    mediateBtn.classList.add("cc-meditate-active")
+    mediateBtn.classList.remove("cc-float")
+    const mr  = mediateBtn.getBoundingClientRect()
+    const mcx = mr.left + mr.width / 2, mcy = mr.top + mr.height / 2
+
+    nodeData.subNodes!.forEach((sn, i) => {
+      const rad = (sn.angle * Math.PI) / 180
+      const sx  = mcx + Math.cos(rad) * SUB_RADIUS - SUB_OFFSET
+      const sy  = mcy + Math.sin(rad) * SUB_RADIUS - SUB_OFFSET
+
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement
+      svg.setAttribute("class", "cc-sub-connector")
+      const snCx = sx + SUB_OFFSET, snCy = sy + SUB_OFFSET
+      const minX = Math.min(mcx, snCx) - 8, minY = Math.min(mcy, snCy) - 8
+      const w = Math.abs(snCx - mcx) + 16, h = Math.abs(snCy - mcy) + 16
+      Object.assign(svg.style, { left: `${minX}px`, top: `${minY}px`, width: `${w}px`, height: `${h}px`, overflow: "visible", opacity: "0", transition: `opacity .3s ease ${i * 55 + 60}ms` })
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line")
+      line.setAttribute("x1", `${mcx - minX}`); line.setAttribute("y1", `${mcy - minY}`)
+      line.setAttribute("x2", `${snCx - minX}`); line.setAttribute("y2", `${snCy - minY}`)
+      line.setAttribute("stroke", "rgba(22,183,194,.22)"); line.setAttribute("stroke-width", "1.5"); line.setAttribute("stroke-dasharray", "4 4")
+      svg.appendChild(line); document.body.appendChild(svg); subConnectors.push(svg)
+      setTimeout(() => { svg.style.opacity = "1" }, 10)
+
+      const btn = document.createElement("button") as HTMLButtonElement
+      btn.className = "cc-sub-node"
+      Object.assign(btn.style, { left: `${sx}px`, top: `${sy}px` })
+      btn.style.setProperty("--sf-dur", `${3.2 + i * 0.22}s`)
+      btn.style.setProperty("--sf-off", `${300 + i * 60}ms`)
+      btn.innerHTML = `<span class="cc-sub-ni">${sn.icon}</span><span class="cc-sub-nl">${sn.label}</span>`
+      btn.addEventListener("mouseenter", () => { if (subCloseTimer) { clearTimeout(subCloseTimer); subCloseTimer = null } })
+      btn.addEventListener("mouseleave", () => { subCloseTimer = setTimeout(closeSubNodes, 180) })
+      btn.addEventListener("click", e => { e.stopPropagation(); closeSubNodes(); closeMenu(); openScreen(sn.id) })
+      document.body.appendChild(btn); subNodes.push(btn)
+      setTimeout(() => {
+        btn.classList.add("cc-sub-in")
+        setTimeout(() => { btn.classList.remove("cc-sub-in"); btn.classList.add("cc-sub-float") }, 420 + i * 55)
+      }, i * 55 + 10)
+    })
+  }
+
+  const closeSubNodes = (immediate = false) => {
+    if (!subOpen) return; subOpen = false
+    if (meditateBtnRef) {
+      meditateBtnRef.classList.remove("cc-meditate-active")
+      if (isOpen) setTimeout(() => meditateBtnRef?.classList.add("cc-float"), 80)
+    }
+    subConnectors.forEach(svg => { svg.style.opacity = "0"; setTimeout(() => svg.remove(), immediate ? 0 : 220) })
+    subConnectors = []
+    subNodes.forEach((btn, i) => {
+      btn.classList.remove("cc-sub-float", "cc-sub-in")
+      if (immediate) { btn.remove(); return }
+      btn.classList.add("cc-sub-out")
+      setTimeout(() => btn.remove(), 260 + i * 30)
+    })
+    subNodes = []
+  }
+
+  const closeMenu = () => {
+    if (!isOpen) return; isOpen = false
+    fab.classList.remove("cc-open"); closeSubNodes(true)
+    r1.classList.remove("cc-vis"); r2.classList.remove("cc-vis")
+    bd?.remove(); bd = null
+    nodes.forEach((btn, i) => {
+      btn.classList.remove("cc-float")
+      Object.assign(btn.style, { transition: `transform .25s cubic-bezier(.4,0,1,1) ${i * 25}ms, opacity .18s ease ${i * 25}ms`, transform: "scale(0.3)", opacity: "0" })
+    })
+    setTimeout(() => { nodes.forEach(b => b.remove()); nodes = []; meditateBtnRef = null }, 380)
+  }
+
+  const openMenu = () => {
+    isOpen = true; fab.classList.add("cc-open")
+    r1.classList.add("cc-vis"); r2.classList.add("cc-vis")
+    bd = document.createElement("div"); bd.id = "cc-bd"
+    bd.addEventListener("click", () => { subOpen ? closeSubNodes() : closeMenu() })
+    document.body.appendChild(bd)
+
+    const fr = fab.getBoundingClientRect()
+    const cx = fr.left + fr.width / 2, cy = fr.top + fr.height / 2
+    nodes = []
+
+    NODES.forEach((node, i) => {
+      const rad = (node.angle * Math.PI) / 180
+      const btn = document.createElement("button") as HTMLButtonElement
+      btn.className = "cc-node"
+      Object.assign(btn.style, {
+        left: `${cx + Math.cos(rad) * RADIUS - OFFSET}px`,
+        top:  `${cy + Math.sin(rad) * RADIUS - OFFSET}px`,
+      })
+      btn.style.setProperty("--f-dur", `${3.1 + i * 0.28}s`)
+      btn.style.setProperty("--f-off", `${400 + i * 70}ms`)
+      btn.innerHTML = `<span class="cc-ni">${node.icon}</span><span class="cc-nl">${node.label}</span>`
+
+      if (node.id === "meditate" && node.subNodes) {
+        meditateBtnRef = btn
+        btn.addEventListener("mouseenter", () => {
+          if (subCloseTimer) { clearTimeout(subCloseTimer); subCloseTimer = null }
+          if (!subOpen) subHoverTimer = setTimeout(() => { if (meditateBtnRef) openSubNodes(meditateBtnRef, node as typeof NODES[1]) }, 220)
+        })
+        btn.addEventListener("mouseleave", () => {
+          if (subHoverTimer) { clearTimeout(subHoverTimer); subHoverTimer = null }
+          if (!subOpen) subCloseTimer = setTimeout(closeSubNodes, 200)
+        })
+        btn.addEventListener("click", e => {
+          e.stopPropagation()
+          subOpen ? closeSubNodes() : (meditateBtnRef && openSubNodes(meditateBtnRef, node as typeof NODES[1]))
+        })
+        return
+      }
+
+      btn.addEventListener("click", e => {
+        e.stopPropagation(); closeMenu()
+        if (node.id === "therapist" && node.url) {
+          ;(chrome as any).tabs?.create({ url: node.url }) ?? window.open(node.url, "_blank")
+          return
+        }
+        openScreen(node.id)
+      })
+      document.body.appendChild(btn); nodes.push(btn)
+      setTimeout(() => {
+        Object.assign(btn.style, {
+          transition: `transform .4s cubic-bezier(.34,1.56,.64,1) ${i * 55}ms, opacity .22s ease ${i * 55}ms`,
+          transform: "scale(1)",
+        })
+        btn.classList.add("cc-vis")
+        setTimeout(() => btn.classList.add("cc-float"), 420 + i * 55)
+      }, 10)
+    })
+
+    if (meditateBtnRef && !nodes.includes(meditateBtnRef)) {
+      document.body.appendChild(meditateBtnRef); nodes.push(meditateBtnRef)
+      const i = NODES.findIndex(n => n.id === "meditate")
+      setTimeout(() => {
+        Object.assign(meditateBtnRef!.style, {
+          transition: `transform .4s cubic-bezier(.34,1.56,.64,1) ${i * 55}ms, opacity .22s ease ${i * 55}ms`,
+          transform: "scale(1)",
+        })
+        meditateBtnRef!.classList.add("cc-vis")
+        setTimeout(() => meditateBtnRef?.classList.add("cc-float"), 420 + i * 55)
+      }, 10)
+    }
+  }
+
+  window.addEventListener(CC_OPEN_MENU, openMenu)
+
+  fab.addEventListener("click", () => {
+    // If pomo is actively running, clicking FAB re-opens the screen
+    if (fab.classList.contains("cc-pomo-active")) {
+      dispatch(CC_OPEN, { screen: "pomodoro" }); return
+    }
+    if (isOpen) { closeSubNodes(); closeMenu(); return }
+    dispatch("cc:fab-clicked")
+  })
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closeSubNodes(); if (isOpen) closeMenu() }
+  })
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 //  GLOBAL STYLES
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 function injectGlobalStyles() {
   if (document.getElementById("cc-global-styles")) return
   const style = document.createElement("style")
@@ -558,209 +585,164 @@ function injectGlobalStyles() {
   document.head.appendChild(style)
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  FAB + RADIAL MENU  (vanilla JS — outside React)
-// ══════════════════════════════════════════════════════════════════
-function initWidget(iconSrc: string) {
-  if (document.getElementById("cc-fab")) return
-  injectGlobalStyles()
+// ══════════════════════════════════════════════════════════════════════════════
+//  DRAGGABLE DIALOG SHELL
+// ══════════════════════════════════════════════════════════════════════════════
+const DIALOG_W   = 360
+const DIALOG_H   = 520
 
-  const r1 = Object.assign(document.createElement("div"), { className: "cc-ring", id: "cc-r1" })
-  const r2 = Object.assign(document.createElement("div"), { className: "cc-ring", id: "cc-r2" })
-  document.body.append(r1, r2)
+function DraggableShell({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  const [visible,  setVisible]  = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const dragging   = useRef(false)
+  const dragOffset = useRef({ x: 0, y: 0 })
 
-  const fab = document.createElement("button")
-  fab.id = "cc-fab"
-  fab.innerHTML = `
-    <img id="cc-fab-img" src="${iconSrc}" alt="logo" />
-    <div id="cc-fab-timer">
-      <span id="cc-fab-timer-label">25:00</span>
-      <span id="cc-fab-timer-mode">Focus</span>
-    </div>
-  `
-  document.body.appendChild(fab)
-
-  // update FAB from global pomo ticks
-  window.addEventListener(CC_POMO_TICK, (e: Event) => {
-    const { timeLeft, running, mode } = (e as CustomEvent<GlobalPomoState>).detail
-    const timerLabel = document.getElementById("cc-fab-timer-label")
-    const timerMode  = document.getElementById("cc-fab-timer-mode")
-    if (timerLabel) timerLabel.textContent = fmt(timeLeft)
-    if (timerMode)  timerMode.textContent  =
-      mode === "focus" ? "Focus" : mode === "short" ? "Short Break" : "Long Break"
-    if (running) {
-      fab.classList.add("cc-pomo-active"); fab.style.animation = "none"
-    } else {
-      fab.classList.remove("cc-pomo-active"); fab.style.animation = ""
-    }
-  })
-
-  let isOpen = false, nodes: HTMLButtonElement[] = [], bd: HTMLElement | null = null
-  let subNodes: HTMLButtonElement[] = [], subConnectors: SVGSVGElement[] = []
-  let subHoverTimer: ReturnType<typeof setTimeout> | null = null
-  let subCloseTimer: ReturnType<typeof setTimeout> | null = null
-  let subOpen = false, meditateBtnRef: HTMLButtonElement | null = null
-
-  const openScreen = (screen: string) => dispatch(CC_OPEN, { screen })
-
-  const openSubNodes = (mediateBtn: HTMLButtonElement, nodeData: typeof NODES[1]) => {
-    if (subOpen) return
-    subOpen = true
-    mediateBtn.classList.add("cc-meditate-active")
-    mediateBtn.classList.remove("cc-float")
-    const mr  = mediateBtn.getBoundingClientRect()
-    const mcx = mr.left + mr.width / 2, mcy = mr.top + mr.height / 2
-
-    nodeData.subNodes!.forEach((sn, i) => {
-      const rad = (sn.angle * Math.PI) / 180
-      const sx  = mcx + Math.cos(rad) * SUB_RADIUS - SUB_OFFSET
-      const sy  = mcy + Math.sin(rad) * SUB_RADIUS - SUB_OFFSET
-
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement
-      svg.setAttribute("class", "cc-sub-connector")
-      const snCx = sx + SUB_OFFSET, snCy = sy + SUB_OFFSET
-      const minX = Math.min(mcx, snCx) - 8, minY = Math.min(mcy, snCy) - 8
-      const w = Math.abs(snCx - mcx) + 16, h = Math.abs(snCy - mcy) + 16
-      Object.assign(svg.style, { left: `${minX}px`, top: `${minY}px`, width: `${w}px`, height: `${h}px`, overflow: "visible", opacity: "0", transition: `opacity .3s ease ${i * 55 + 60}ms` })
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line")
-      line.setAttribute("x1", `${mcx - minX}`); line.setAttribute("y1", `${mcy - minY}`)
-      line.setAttribute("x2", `${snCx - minX}`); line.setAttribute("y2", `${snCy - minY}`)
-      line.setAttribute("stroke", "rgba(22,183,194,.22)"); line.setAttribute("stroke-width", "1.5"); line.setAttribute("stroke-dasharray", "4 4")
-      svg.appendChild(line); document.body.appendChild(svg); subConnectors.push(svg)
-      setTimeout(() => { svg.style.opacity = "1" }, 10)
-
-      const btn = document.createElement("button") as HTMLButtonElement
-      btn.className = "cc-sub-node"
-      Object.assign(btn.style, { left: `${sx}px`, top: `${sy}px` })
-      btn.style.setProperty("--sf-dur", `${3.2 + i * 0.22}s`)
-      btn.style.setProperty("--sf-off", `${300 + i * 60}ms`)
-      btn.innerHTML = `<span class="cc-sub-ni">${sn.icon}</span><span class="cc-sub-nl">${sn.label}</span>`
-      btn.addEventListener("mouseenter", () => { if (subCloseTimer) { clearTimeout(subCloseTimer); subCloseTimer = null } })
-      btn.addEventListener("mouseleave", () => { subCloseTimer = setTimeout(closeSubNodes, 180) })
-      btn.addEventListener("click", e => { e.stopPropagation(); closeSubNodes(); closeMenu(); openScreen(sn.id) })
-      document.body.appendChild(btn); subNodes.push(btn)
-      setTimeout(() => {
-        btn.classList.add("cc-sub-in")
-        setTimeout(() => { btn.classList.remove("cc-sub-in"); btn.classList.add("cc-sub-float") }, 420 + i * 55)
-      }, i * 55 + 10)
+  useEffect(() => {
+    const w = expanded ? DIALOG_W + 80 : (wide ? 400 : DIALOG_W)
+    const h = DIALOG_H
+    const x = FAB_LEFT + FAB_SIZE + 12
+    const y = window.innerHeight - FAB_BOTTOM - FAB_SIZE - h + FAB_SIZE / 2
+    setPos({
+      x: Math.min(x, window.innerWidth - w - 12),
+      y: Math.max(12, Math.min(y, window.innerHeight - h - 12)),
     })
-  }
+    requestAnimationFrame(() => setVisible(true))
+  }, [])
 
-  const closeSubNodes = (immediate = false) => {
-    if (!subOpen) return; subOpen = false
-    if (meditateBtnRef) {
-      meditateBtnRef.classList.remove("cc-meditate-active")
-      if (isOpen) setTimeout(() => meditateBtnRef?.classList.add("cc-float"), 80)
-    }
-    subConnectors.forEach(svg => { svg.style.opacity = "0"; setTimeout(() => svg.remove(), immediate ? 0 : 220) })
-    subConnectors = []
-    subNodes.forEach((btn, i) => {
-      btn.classList.remove("cc-sub-float", "cc-sub-in")
-      if (immediate) { btn.remove(); return }
-      btn.classList.add("cc-sub-out")
-      setTimeout(() => btn.remove(), 260 + i * 30)
-    })
-    subNodes = []
-  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
 
-  const closeMenu = () => {
-    if (!isOpen) return; isOpen = false
-    fab.classList.remove("cc-open"); closeSubNodes(true)
-    r1.classList.remove("cc-vis"); r2.classList.remove("cc-vis")
-    bd?.remove(); bd = null
-    nodes.forEach((btn, i) => {
-      btn.classList.remove("cc-float")
-      Object.assign(btn.style, { transition: `transform .25s cubic-bezier(.4,0,1,1) ${i * 25}ms, opacity .18s ease ${i * 25}ms`, transform: "scale(0.3)", opacity: "0" })
-    })
-    setTimeout(() => { nodes.forEach(b => b.remove()); nodes = []; meditateBtnRef = null }, 380)
-  }
+  const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button, input, textarea, select, a")) return
+    dragging.current = true
+    dragOffset.current = { x: e.clientX - (pos?.x ?? 0), y: e.clientY - (pos?.y ?? 0) }
+    document.body.style.userSelect = "none"
+  }, [pos])
 
-  const openMenu = () => {
-    isOpen = true; fab.classList.add("cc-open")
-    r1.classList.add("cc-vis"); r2.classList.add("cc-vis")
-    bd = document.createElement("div"); bd.id = "cc-bd"
-    bd.addEventListener("click", () => { subOpen ? closeSubNodes() : closeMenu() })
-    document.body.appendChild(bd)
-
-    const fr = fab.getBoundingClientRect()
-    const cx = fr.left + fr.width / 2, cy = fr.top + fr.height / 2
-    nodes = []
-
-    NODES.forEach((node, i) => {
-      const rad = (node.angle * Math.PI) / 180
-      const btn = document.createElement("button") as HTMLButtonElement
-      btn.className = "cc-node"
-      Object.assign(btn.style, { left: `${cx + Math.cos(rad) * RADIUS - OFFSET}px`, top: `${cy + Math.sin(rad) * RADIUS - OFFSET}px` })
-      btn.style.setProperty("--f-dur", `${3.1 + i * 0.28}s`)
-      btn.style.setProperty("--f-off", `${400 + i * 70}ms`)
-      btn.innerHTML = `<span class="cc-ni">${node.icon}</span><span class="cc-nl">${node.label}</span>`
-
-      if (node.id === "meditate" && node.subNodes) {
-        meditateBtnRef = btn
-        btn.addEventListener("mouseenter", () => {
-          if (subCloseTimer) { clearTimeout(subCloseTimer); subCloseTimer = null }
-          if (!subOpen) subHoverTimer = setTimeout(() => { if (meditateBtnRef) openSubNodes(meditateBtnRef, node as typeof NODES[1]) }, 220)
-        })
-        btn.addEventListener("mouseleave", () => {
-          if (subHoverTimer) { clearTimeout(subHoverTimer); subHoverTimer = null }
-          if (!subOpen) subCloseTimer = setTimeout(closeSubNodes, 200)
-        })
-        btn.addEventListener("click", e => {
-          e.stopPropagation()
-          subOpen ? closeSubNodes() : (meditateBtnRef && openSubNodes(meditateBtnRef, node as typeof NODES[1]))
-        })
-        return
-      }
-
-      btn.addEventListener("click", e => {
-        e.stopPropagation(); closeMenu()
-        if (node.id === "therapist" && node.url) {
-          ;(chrome as any).tabs?.create({ url: node.url }) ?? window.open(node.url, "_blank")
-          return
-        }
-        openScreen(node.id)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return
+      const w = expanded ? DIALOG_W + 80 : (wide ? 400 : DIALOG_W)
+      setPos({
+        x: Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - w)),
+        y: Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - DIALOG_H)),
       })
-      document.body.appendChild(btn); nodes.push(btn)
-      setTimeout(() => {
-        Object.assign(btn.style, { transition: `transform .4s cubic-bezier(.34,1.56,.64,1) ${i * 55}ms, opacity .22s ease ${i * 55}ms`, transform: "scale(1)" })
-        btn.classList.add("cc-vis")
-        setTimeout(() => btn.classList.add("cc-float"), 420 + i * 55)
-      }, 10)
-    })
-
-    if (meditateBtnRef && !nodes.includes(meditateBtnRef)) {
-      document.body.appendChild(meditateBtnRef); nodes.push(meditateBtnRef)
-      const i = NODES.findIndex(n => n.id === "meditate")
-      setTimeout(() => {
-        Object.assign(meditateBtnRef!.style, { transition: `transform .4s cubic-bezier(.34,1.56,.64,1) ${i * 55}ms, opacity .22s ease ${i * 55}ms`, transform: "scale(1)" })
-        meditateBtnRef!.classList.add("cc-vis")
-        setTimeout(() => meditateBtnRef?.classList.add("cc-float"), 420 + i * 55)
-      }, 10)
     }
-  }
+    const onUp = () => { dragging.current = false; document.body.style.userSelect = "" }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp) }
+  }, [expanded, wide])
 
-  window.addEventListener(CC_OPEN_MENU, openMenu)
+  if (!pos) return null
+  const currentW = expanded ? DIALOG_W + 80 : (wide ? 400 : DIALOG_W)
 
-  fab.addEventListener("click", () => {
-    if (fab.classList.contains("cc-pomo-active")) {
-      dispatch(CC_OPEN, { screen: "pomodoro" }); return
-    }
-    if (isOpen) { closeSubNodes(); closeMenu(); return }
-    dispatch("cc:fab-clicked")
-  })
-
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") { closeSubNodes(); if (isOpen) closeMenu() }
-  })
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 2147483646, pointerEvents: "none", isolation: "isolate" }}>
+      <div style={{
+        position: "absolute", left: pos.x, top: pos.y,
+        width: currentW, height: DIALOG_H, borderRadius: 20,
+        background: "rgba(239,246,255,0.96)",
+        backdropFilter: "blur(20px) saturate(1.5)", WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+        boxShadow: "0 24px 64px rgba(8,28,58,.28), 0 4px 16px rgba(8,28,58,.12), 0 0 0 1px rgba(12,62,111,.08)",
+        overflow: "hidden", display: "flex", flexDirection: "column", pointerEvents: "auto",
+        transform: visible ? "scale(1) translateY(0)" : "scale(.94) translateY(12px)",
+        opacity: visible ? 1 : 0,
+        transition: "transform .34s cubic-bezier(.34,1.56,.64,1), opacity .24s ease, width .28s cubic-bezier(.4,0,.2,1)",
+      }}>
+        <div onMouseDown={onMouseDown} style={{ position: "absolute", top: 0, left: 52, right: 72, height: 52, cursor: "grab", zIndex: 10 }} />
+        <div style={{ position: "absolute", top: 5, right: 14, display: "flex", alignItems: "center", gap: 6, zIndex: 20 }}>
+          <button
+            onClick={() => setExpanded(v => !v)}
+            style={{ width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(12,62,111,.12)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 11, color: "#6a8fab", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .18s", outline: "none" }}
+            onMouseEnter={e => { e.currentTarget.style.background = "#16B7C2"; e.currentTarget.style.color = "#fff" }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.7)"; e.currentTarget.style.color = "#6a8fab" }}
+          >{expanded ? "⇤" : "⇥"}</button>
+          <button
+            onClick={onClose}
+            style={{ width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(12,62,111,.12)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 13, color: "#6a8fab", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .18s", outline: "none" }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(220,60,60,.9)"; e.currentTarget.style.color = "#fff" }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.7)"; e.currentTarget.style.color = "#6a8fab" }}
+          >×</button>
+        </div>
+        <div style={{ position: "absolute", top: 2, left: "50%", transform: "translateX(-50%)", width: 32, height: 5, borderRadius: 2, background: "rgba(12,62,111,.12)", pointerEvents: "none", zIndex: 5 }} />
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+//  AUTO QUOTE BUBBLE
+// ══════════════════════════════════════════════════════════════════════════════
+function AutoQuoteBubble({ text, author, onDismiss, onOpen }: { text: string; author: string; onDismiss: () => void; onOpen: () => void }) {
+  const [visible, setVisible] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true))
+    timerRef.current = setTimeout(() => { setVisible(false); setTimeout(onDismiss, 400) }, 8000)
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [])
+
+  const dismiss = () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setVisible(false); setTimeout(onDismiss, 400)
+  }
+
+  return (
+    <div style={{ position: "fixed", bottom: FAB_BOTTOM + FAB_SIZE + 14, left: FAB_LEFT, width: 240, zIndex: 2147483646, pointerEvents: "auto", transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(.94)", opacity: visible ? 1 : 0, transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease" }}>
+      <div style={{ position: "absolute", bottom: -7, left: 20, width: 14, height: 8, overflow: "hidden" }}>
+        <div style={{ width: 14, height: 14, background: "rgba(239,246,255,0.96)", border: "1px solid rgba(12,62,111,.1)", transform: "rotate(45deg) translateY(-7px)", boxShadow: "2px 2px 6px rgba(8,28,58,.1)" }} />
+      </div>
+      <div style={{ borderRadius: 16, background: "rgba(239,246,255,0.96)", backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)", boxShadow: "0 12px 40px rgba(8,28,58,.22), 0 0 0 1px rgba(12,62,111,.1)", padding: "14px 16px 12px", position: "relative" }}>
+        <button onClick={dismiss} style={{ position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "#8aadcc", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }}>×</button>
+        <p style={{ margin: "0 20px 6px 0", fontSize: 12.5, fontWeight: 300, lineHeight: 1.6, color: "#0c3e6f", fontStyle: "italic" }}>"{text}"</p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 10, color: "#8aadcc", letterSpacing: "0.6px" }}>— {author}</span>
+          <button onClick={() => { dismiss(); onOpen() }} style={{ fontSize: 10, color: "#16B7C2", border: "none", background: "transparent", cursor: "pointer", fontWeight: 500, padding: "2px 6px", borderRadius: 6, transition: "background .15s" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(22,183,194,.1)" }} onMouseLeave={e => { e.currentTarget.style.background = "transparent" }}>More →</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  AUTH SCREEN
+// ══════════════════════════════════════════════════════════════════════════════
+class ErrorBoundary extends React.Component<{ fallback: React.ReactNode; children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(e: any) { console.error("AuthForm crashed:", e) }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children }
+}
+
+function AuthScreen({ onSuccess }: { onSuccess: () => void; onClose: () => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
+      <ErrorBoundary fallback={<div style={{ padding: 20, color: "red", fontSize: 12 }}>Auth failed to load.</div>}>
+        <AuthForm onSuccess={onSuccess} />
+      </ErrorBoundary>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  ROOT REACT COMPONENT
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 export default function Widget() {
   const [activeScreen, setActiveScreen] = useState<string | null>(null)
   const [overlayRoot,  setOverlayRoot]  = useState<HTMLElement | null>(null)
+  const [autoQuote, setAutoQuote] = useState<{ text: string; author: string } | null>(null)
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
+  const activeScreenRef = useRef<string | null>(null)
+  useEffect(() => { activeScreenRef.current = activeScreen }, [activeScreen])
 
   useEffect(() => { hydrate() }, [])
   useEffect(() => {
@@ -770,17 +752,27 @@ export default function Widget() {
   useEffect(() => { initWidget(icon) }, [])
 
   useEffect(() => {
+    const onAutoQuote = () => {
+      if (activeScreenRef.current) return
+      if (!QUOTES.length) return
+      const q = QUOTES[Math.floor(Math.random() * QUOTES.length)]
+      setAutoQuote({ text: q.text, author: q.author })
+    }
+    window.addEventListener(CC_AUTO_QUOTE, onAutoQuote)
+    return () => window.removeEventListener(CC_AUTO_QUOTE, onAutoQuote)
+  }, [])
+
+  useEffect(() => {
     const onFabClick = () => {
       if (!isHydrated) return
       if (!isAuthenticated) setActiveScreen("auth")
-      else window.dispatchEvent(new CustomEvent("cc:open-menu"))
+      else window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
     }
     const onOpen  = (e: Event) => {
       const screen = (e as CustomEvent<{ screen: string }>).detail?.screen
       if (screen) setActiveScreen(screen)
     }
     const onClose = () => setActiveScreen(null)
-
     window.addEventListener("cc:fab-clicked", onFabClick)
     window.addEventListener(CC_OPEN,  onOpen)
     window.addEventListener(CC_CLOSE, onClose)
@@ -792,11 +784,11 @@ export default function Widget() {
   }, [isAuthenticated, isHydrated])
 
   const closeScreen    = () => { setActiveScreen(null); dispatch(CC_CLOSE) }
-  const minimizeScreen = () => setActiveScreen(null) // timer keeps running
+  const minimizeScreen = () => setActiveScreen(null)
 
   const handleAuthSuccess = () => {
     setActiveScreen(null)
-    setTimeout(() => window.dispatchEvent(new CustomEvent("cc:open-menu")), 120)
+    setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
   }
 
   const screenEl = (() => {
@@ -812,7 +804,7 @@ export default function Widget() {
       case "pomodoro":
         return (
           <PomodoroScreen
-            onBack={() => { pomoStop(); closeScreen() }}
+            onBack={closeScreen}
             onMinimize={minimizeScreen}
           />
         )
@@ -823,20 +815,30 @@ export default function Widget() {
     }
   })()
 
-  if (!screenEl) return null
-
   const isAuthScreen = activeScreen === "auth"
-  // Pomodoro pe background click = minimize (timer chalta rahe)
   const shellOnClose = activeScreen === "pomodoro" ? minimizeScreen : closeScreen
 
-  return overlayRoot
-    ? createPortal(
-        <QueryClientProvider client={queryClient}>
-          <OverlayShell onClose={shellOnClose} wide={isAuthScreen}>
-            {screenEl}
-          </OverlayShell>
-        </QueryClientProvider>,
-        overlayRoot
-      )
-    : null
+  if (!overlayRoot) return null
+
+  return createPortal(
+    <QueryClientProvider client={queryClient}>
+      {/* ── Always-on pomo toast — survives screen minimize/close ── */}
+      <PomoToastBubble />
+
+      {autoQuote && !activeScreen && (
+        <AutoQuoteBubble
+          text={autoQuote.text}
+          author={autoQuote.author}
+          onDismiss={() => setAutoQuote(null)}
+          onOpen={() => { setAutoQuote(null); setActiveScreen("quote") }}
+        />
+      )}
+      {screenEl && (
+        <DraggableShell onClose={shellOnClose} wide={isAuthScreen}>
+          {screenEl}
+        </DraggableShell>
+      )}
+    </QueryClientProvider>,
+    overlayRoot
+  )
 }

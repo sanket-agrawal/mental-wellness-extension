@@ -1,5 +1,3 @@
-import type { FeelingOption, PomodoroMode, Quote } from "~src/lib/types"
-
 export const AI_RESPONSES: Record<string, string[]> = {
   overwhelmed: [
     "That sounds like a lot to carry. What's been feeling the heaviest lately?",
@@ -50,10 +48,6 @@ export const MEDITATE_STEPS = [
 
 
 
-export  const POMO_DEFAULTS: Record<PomodoroMode, number> = { focus: 25, short: 5, long: 15 }
-export const POMO_LABELS: Record<PomodoroMode, string> = { focus: "Focus", short: "Short Break", long: "Long Break" }
-export const CIRC = 2 * Math.PI * 88
-export const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
 
 
 

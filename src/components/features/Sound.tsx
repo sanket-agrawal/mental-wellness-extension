@@ -55,7 +55,7 @@ export function SoundsScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 420 }}>
-      <TopBar title="Ambient Sounds" onBack={onBack} />
+      <TopBar title="Meditate" onBack={onBack} />
       <div style={{ flex: 1, padding: "20px 20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
           {SOUNDS.map(s => {

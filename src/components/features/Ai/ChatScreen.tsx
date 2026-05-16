@@ -540,7 +540,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
             onClick={handleOpenSidebar}
             title="Past conversations"
             style={{
-              position: "absolute", left: 10, zIndex: 3,
+              position: "absolute", left: 10, zIndex: 30,
               width: 32, height: 32, borderRadius: 9,
               border: "1px solid rgba(12,62,111,0.12)",
               background: "rgba(255,255,255,0.7)",
