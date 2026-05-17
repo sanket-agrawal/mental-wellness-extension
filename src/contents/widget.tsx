@@ -82,8 +82,6 @@ function fmt(s: number) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PERSISTENT FAB-LEVEL POMO TOAST
-//  Always mounted in Widget root — survives screen open/close/minimize.
-//  Listens to cc:pomo-toast and renders above the FAB button.
 // ══════════════════════════════════════════════════════════════════════════════
 const FAB_BOTTOM = 28
 const FAB_LEFT   = 28
@@ -115,7 +113,6 @@ function PomoToastBubble() {
       setCountdown(cd ?? null)
       requestAnimationFrame(() => setVisible(true))
 
-      // If there's a countdown, tick it down
       if (cd && cd > 0) {
         let remaining = cd
         countdownRef.current = setInterval(() => {
@@ -128,7 +125,6 @@ function PomoToastBubble() {
         }, 1000)
       }
 
-      // Auto-hide after max(4s, cd+1s)
       const hideAfter = cd ? (cd + 1) * 1000 : 4000
       hideTimerRef.current = setTimeout(() => {
         setVisible(false)
@@ -161,7 +157,6 @@ function PomoToastBubble() {
         transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease",
       }}
     >
-      {/* Arrow pointing down toward FAB */}
       <div style={{ position: "absolute", bottom: -7, left: 20, width: 14, height: 8, overflow: "hidden" }}>
         <div style={{
           width: 14, height: 14,
@@ -180,8 +175,6 @@ function PomoToastBubble() {
         padding:              "12px 14px 11px",
         position:             "relative",
       }}>
-
-        {/* Dismiss × */}
         <button
           onClick={dismiss}
           style={{
@@ -195,7 +188,6 @@ function PomoToastBubble() {
           }}
         >×</button>
 
-        {/* Message */}
         <p style={{
           margin: "0 24px 6px 0",
           fontSize: 12.5, fontWeight: 600,
@@ -205,7 +197,6 @@ function PomoToastBubble() {
           {toast.message}
         </p>
 
-        {/* Sub row: text + bare countdown number */}
         {(toast.sub || countdown !== null) && (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {toast.sub && (
@@ -238,7 +229,7 @@ function PomoToastBubble() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  FAB init — subscribes to pomoTimer to update FAB label & style
+//  FAB init
 // ══════════════════════════════════════════════════════════════════════════════
 function initWidget(iconSrc: string) {
   if (document.getElementById("cc-fab")) return
@@ -261,7 +252,6 @@ function initWidget(iconSrc: string) {
 
   startAutoQuoteScheduler()
 
-  // Subscribe to global timer — updates FAB live, survives screen open/close
   pomoTimer.subscribe(({ timeLeft, running, mode }) => {
     const timerLabel = document.getElementById("cc-fab-timer-label")
     const timerMode  = document.getElementById("cc-fab-timer-mode")
@@ -431,7 +421,6 @@ function initWidget(iconSrc: string) {
   window.addEventListener(CC_OPEN_MENU, openMenu)
 
   fab.addEventListener("click", () => {
-    // If pomo is actively running, clicking FAB re-opens the screen
     if (fab.classList.contains("cc-pomo-active")) {
       dispatch(CC_OPEN, { screen: "pomodoro" }); return
     }
@@ -679,9 +668,17 @@ function DraggableShell({ onClose, children, wide }: { onClose: () => void; chil
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  AUTO QUOTE BUBBLE
+//  AUTO QUOTE BUBBLE — now shows feeling badge
 // ══════════════════════════════════════════════════════════════════════════════
-function AutoQuoteBubble({ text, author, onDismiss, onOpen }: { text: string; author: string; onDismiss: () => void; onOpen: () => void }) {
+function AutoQuoteBubble({
+  text, author, feeling, onDismiss, onOpen
+}: {
+  text: string
+  author: string
+  feeling: { symbol: string; label: string }
+  onDismiss: () => void
+  onOpen: () => void
+}) {
   const [visible, setVisible] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -703,6 +700,12 @@ function AutoQuoteBubble({ text, author, onDismiss, onOpen }: { text: string; au
       </div>
       <div style={{ borderRadius: 16, background: "rgba(239,246,255,0.96)", backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)", boxShadow: "0 12px 40px rgba(8,28,58,.22), 0 0 0 1px rgba(12,62,111,.1)", padding: "14px 16px 12px", position: "relative" }}>
         <button onClick={dismiss} style={{ position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "#8aadcc", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }}>×</button>
+
+        {/* Feeling badge */}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 99, background: "rgba(22,183,194,.08)", border: "1px solid rgba(22,183,194,.2)", fontSize: 10, color: "#16B7C2", fontWeight: 500, marginBottom: 8 }}>
+          {feeling.symbol} {feeling.label}
+        </div>
+
         <p style={{ margin: "0 20px 6px 0", fontSize: 12.5, fontWeight: 300, lineHeight: 1.6, color: "#0c3e6f", fontStyle: "italic" }}>"{text}"</p>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 10, color: "#8aadcc", letterSpacing: "0.6px" }}>— {author}</span>
@@ -739,7 +742,7 @@ function AuthScreen({ onSuccess }: { onSuccess: () => void; onClose: () => void 
 export default function Widget() {
   const [activeScreen, setActiveScreen] = useState<string | null>(null)
   const [overlayRoot,  setOverlayRoot]  = useState<HTMLElement | null>(null)
-  const [autoQuote, setAutoQuote] = useState<{ text: string; author: string } | null>(null)
+  const [autoQuote, setAutoQuote] = useState<{ text: string; author: string; feeling: { symbol: string; label: string } } | null>(null)
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
   const activeScreenRef = useRef<string | null>(null)
   useEffect(() => { activeScreenRef.current = activeScreen }, [activeScreen])
@@ -756,7 +759,8 @@ export default function Widget() {
       if (activeScreenRef.current) return
       if (!QUOTES.length) return
       const q = QUOTES[Math.floor(Math.random() * QUOTES.length)]
-      setAutoQuote({ text: q.text, author: q.author })
+      // Pass feeling from the quote directly
+      setAutoQuote({ text: q.text, author: q.author, feeling: q.feeling })
     }
     window.addEventListener(CC_AUTO_QUOTE, onAutoQuote)
     return () => window.removeEventListener(CC_AUTO_QUOTE, onAutoQuote)
@@ -822,13 +826,13 @@ export default function Widget() {
 
   return createPortal(
     <QueryClientProvider client={queryClient}>
-      {/* ── Always-on pomo toast — survives screen minimize/close ── */}
       <PomoToastBubble />
 
       {autoQuote && !activeScreen && (
         <AutoQuoteBubble
           text={autoQuote.text}
           author={autoQuote.author}
+          feeling={autoQuote.feeling}
           onDismiss={() => setAutoQuote(null)}
           onOpen={() => { setAutoQuote(null); setActiveScreen("quote") }}
         />

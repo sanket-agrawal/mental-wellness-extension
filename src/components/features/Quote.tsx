@@ -1,22 +1,46 @@
 import { FEELING_OPTIONS, QUOTES } from "~src/lib/constants/contant"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { TopBar } from "../Topbar"
 
-
-
 export function QuoteScreen({ onBack }: { onBack: () => void }) {
-  const [quoteIdx, setQuoteIdx] = useState(() => Math.floor(Math.random() * QUOTES.length))
-  const [feeling, setFeeling] = useState<string | null>(null)
-  const quote = QUOTES[quoteIdx]
+  const [activeFeeling, setActiveFeeling] = useState<string | null>(null)
+  const [reacted, setReacted] = useState<string | null>(null)
 
-  const nextQuote = () => setQuoteIdx(i => (i + 1) % QUOTES.length)
+  const filtered = useMemo(() =>
+    activeFeeling
+      ? QUOTES.filter(q => q.feeling.label === activeFeeling)
+      : QUOTES,
+    [activeFeeling]
+  )
+
+  const [quoteIdx, setQuoteIdx] = useState(() => Math.floor(Math.random() * QUOTES.length))
+
+  const quote = useMemo(() => {
+    const idx = quoteIdx % filtered.length
+    return filtered[idx]
+  }, [quoteIdx, filtered])
+
+  const nextQuote = () => setQuoteIdx(i => i + 1)
+
+  const handleFeelingFilter = (label: string) => {
+    if (activeFeeling === label) {
+      setActiveFeeling(null)
+    } else {
+      setActiveFeeling(label)
+      setQuoteIdx(0)
+    }
+    setReacted(null)
+  }
+
+  const handleReact = (label: string) => {
+    setReacted(label)
+    setTimeout(() => setReacted(null), 2200)
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* TopBar — renamed to "Positive Vibes" */}
       <TopBar title="Positive Vibes ✨" onBack={onBack} />
 
-      {/* Scrollable body — contained within fixed dialog height */}
       <div style={{
         flex: 1,
         overflowY: "auto",
@@ -27,6 +51,7 @@ export function QuoteScreen({ onBack }: { onBack: () => void }) {
         padding: "20px 32px 24px",
         textAlign: "center",
       }}>
+
         {/* Opening quote mark */}
         <div style={{
           fontSize: 64,
@@ -61,34 +86,32 @@ export function QuoteScreen({ onBack }: { onBack: () => void }) {
           fontWeight: 400,
           letterSpacing: "1.4px",
           textTransform: "uppercase",
-          marginBottom: 28,
+          marginBottom: 12,
           color: "#8aadcc",
         }}>
           — {quote.author}
         </p>
 
-        {/* Feeling reaction row */}
-        <div style={{ marginBottom: 28 }}>
+          {/* Feeling filter pills */}
+        <div style={{ marginBottom: 24, width: "100%" }}>
           <p style={{ fontSize: 10.5, marginBottom: 10, color: "#8aadcc" }}>
-            How does this land with you?
+           What does your heart need right now? 💙
           </p>
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
             {FEELING_OPTIONS.map(f => (
               <button
                 key={f.label}
-                onClick={() => {
-                  setFeeling(f.label)
-                  setTimeout(() => setFeeling(null), 2200)
-                }}
+                onClick={() => handleFeelingFilter(f.label)}
                 style={{
-                  padding: "6px 12px",
+                  padding: "5px 11px",
                   borderRadius: 99,
                   fontSize: 11,
                   cursor: "pointer",
-                  border: `1px solid ${feeling === f.label ? "#16B7C2" : "rgba(12,62,111,.12)"}`,
-                  background: feeling === f.label ? "#16B7C2" : "rgba(255,255,255,.85)",
-                  color: feeling === f.label ? "#fff" : "#2a5a8a",
+                  border: `1px solid ${activeFeeling === f.label ? "#16B7C2" : "rgba(12,62,111,.12)"}`,
+                  background: activeFeeling === f.label ? "#16B7C2" : "rgba(255,255,255,.85)",
+                  color: activeFeeling === f.label ? "#fff" : "#2a5a8a",
                   transition: "all .2s",
+                  fontWeight: activeFeeling === f.label ? 500 : 400,
                 }}
               >
                 {f.symbol} {f.label}
@@ -97,6 +120,8 @@ export function QuoteScreen({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
+
+    
         {/* Next quote CTA */}
         <button
           onClick={nextQuote}

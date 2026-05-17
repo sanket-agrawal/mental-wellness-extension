@@ -9,6 +9,12 @@ const VENT_API_URL = `${process.env.PLASMO_PUBLIC_API_URL}/api/v1/ai/vent/text/m
 const SESSION_API_URL = `${process.env.PLASMO_PUBLIC_API_URL}/api/v1/ai/vent/text/sessions`
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+interface Helpline {
+  name: string
+  number: string
+  available: string
+}
+
 interface Session {
   sessionId: string
   title: string
@@ -21,6 +27,8 @@ interface Message {
   id: string
   role: string
   text: string
+  isCrisis?: boolean
+  helplines?: Helpline[]
 }
 
 // ─── Typing Dots ─────────────────────────────────────────────────────────────
@@ -30,10 +38,7 @@ const TypingDots = () => (
       <span
         key={i}
         style={{
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          background: "#16B7C2",
+          width: 5, height: 5, borderRadius: "50%", background: "#16B7C2",
           opacity: 0.5,
           animation: `typingPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
         }}
@@ -67,6 +72,10 @@ const TypingDots = () => (
       @keyframes sessionItemIn {
         from { opacity: 0; transform: translateX(-10px); }
         to   { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes crisisIn {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
       }
     `}</style>
   </span>
@@ -124,32 +133,129 @@ const SendBtn = ({ onClick, disabled }: { onClick: () => void; disabled: boolean
   )
 }
 
+// ─── Crisis Card ──────────────────────────────────────────────────────────────
+const CrisisCard = ({ helplines }: { helplines: Helpline[] }) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+
+  const handleCall = (number: string) => {
+    window.open(`tel:${number}`, "_self")
+  }
+
+  return (
+    <div
+      style={{
+        margin: "4px 0 4px 37px",
+        background: "linear-gradient(135deg, rgba(255,245,245,0.97) 0%, rgba(255,240,240,0.95) 100%)",
+        border: "1px solid rgba(220,53,69,0.2)",
+        borderLeft: "3px solid #dc3545",
+        borderRadius: "0 12px 12px 12px",
+        padding: "12px 14px",
+        animation: "crisisIn 0.35s ease both",
+        boxShadow: "0 2px 12px rgba(220,53,69,0.08)",
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+        <div style={{
+          width: 22, height: 22, borderRadius: 6,
+          background: "rgba(220,53,69,0.1)",
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </div>
+        <div>
+          <div style={{ fontSize: 11.5, fontWeight: 650, color: "#b02a37", letterSpacing: "0.01em" }}>
+            You're not alone — support is available
+          </div>
+          <div style={{ fontSize: 10, color: "#c0636b", marginTop: 1, fontWeight: 400 }}>
+            Trained counsellors are just a call away, 24/7
+          </div>
+        </div>
+      </div>
+
+      {/* Helplines */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {helplines.map((h, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "8px 10px", borderRadius: 9,
+              background: hoveredIdx === i ? "rgba(220,53,69,0.08)" : "rgba(255,255,255,0.7)",
+              border: `1px solid ${hoveredIdx === i ? "rgba(220,53,69,0.2)" : "rgba(220,53,69,0.1)"}`,
+              transition: "all 0.16s ease", cursor: "pointer",
+              animation: `crisisIn 0.35s ease both`,
+              animationDelay: `${i * 60 + 100}ms`,
+            }}
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+            onClick={() => handleCall(h.number)}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#8b1a24", letterSpacing: "0.005em" }}>
+                {h.name}
+              </span>
+              <span style={{ fontSize: 9.5, color: "#a04050", fontWeight: 400 }}>
+                {h.available}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 650, color: "#b02a37", letterSpacing: "0.02em" }}>
+                {h.number}
+              </span>
+              <div style={{
+                width: 24, height: 24, borderRadius: 7,
+                background: hoveredIdx === i ? "#dc3545" : "rgba(220,53,69,0.12)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "all 0.16s ease", flexShrink: 0,
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                  stroke={hoveredIdx === i ? "#fff" : "#dc3545"}
+                  strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.59 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.02z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 9, fontSize: 9.5, color: "#a04050", lineHeight: 1.5, fontWeight: 400 }}>
+        💙 Tap any helpline to call. It's free, confidential, and you deserve support.
+      </div>
+    </div>
+  )
+}
+
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 const MessageBubble = ({ msg, index }: { msg: Message; index: number }) => {
   const isAi = msg.role === "ai"
   return (
-    <div style={{ display: "flex", justifyContent: isAi ? "flex-start" : "flex-end", gap: 9, animation: "fadeSlideIn 0.28s ease both", animationDelay: `${Math.min(index * 30, 200)}ms` }}>
-      {isAi && (
-        <div style={{ width: 28, height: 28, flexShrink: 0, marginTop: 2, borderRadius: 8, background: "rgba(22,183,194,0.08)", border: "1px solid rgba(22,183,194,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <img src={cc} alt="companion" style={{ width: 18, height: 18 }} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      <div style={{ display: "flex", justifyContent: isAi ? "flex-start" : "flex-end", gap: 9, animation: "fadeSlideIn 0.28s ease both", animationDelay: `${Math.min(index * 30, 200)}ms` }}>
+        {isAi && (
+          <div style={{ width: 28, height: 28, flexShrink: 0, marginTop: 2, borderRadius: 8, background: "rgba(22,183,194,0.08)", border: "1px solid rgba(22,183,194,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <img src={cc} alt="companion" style={{ width: 18, height: 18 }} />
+          </div>
+        )}
+        <div style={{ maxWidth: "78%", fontSize: 12.5, lineHeight: 1.75, fontWeight: isAi ? 350 : 400, padding: "10px 14px", borderRadius: isAi ? "3px 14px 14px 14px" : "14px 3px 14px 14px", background: isAi ? "rgba(255,255,255,0.9)" : "linear-gradient(135deg, #0e4a80 0%, #0c3e6f 100%)", color: isAi ? "#1a3d5c" : "#f0f8ff", border: isAi ? "1px solid rgba(12,62,111,0.09)" : "none", boxShadow: isAi ? "0 1px 6px rgba(12,62,111,0.06)" : "0 2px 10px rgba(12,62,111,0.25)", letterSpacing: "0.005em" }}>
+          {msg.text}
         </div>
-      )}
-      <div style={{ maxWidth: "78%", fontSize: 12.5, lineHeight: 1.75, fontWeight: isAi ? 350 : 400, padding: "10px 14px", borderRadius: isAi ? "3px 14px 14px 14px" : "14px 3px 14px 14px", background: isAi ? "rgba(255,255,255,0.9)" : "linear-gradient(135deg, #0e4a80 0%, #0c3e6f 100%)", color: isAi ? "#1a3d5c" : "#f0f8ff", border: isAi ? "1px solid rgba(12,62,111,0.09)" : "none", boxShadow: isAi ? "0 1px 6px rgba(12,62,111,0.06)" : "0 2px 10px rgba(12,62,111,0.25)", letterSpacing: "0.005em" }}>
-        {msg.text}
       </div>
+
+      {/* Crisis card shown below AI message if isCrisis */}
+      {isAi && msg.isCrisis && msg.helplines && msg.helplines.length > 0 && (
+        <CrisisCard helplines={msg.helplines} />
+      )}
     </div>
   )
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 const Sidebar = ({
-  open,
-  onClose,
-  sessions,
-  loading,
-  activeSessionId,
-  onSelectSession,
-  onNewChat,
+  open, onClose, sessions, loading, activeSessionId, onSelectSession, onNewChat, onDeleteSession,
 }: {
   open: boolean
   onClose: () => void
@@ -158,8 +264,11 @@ const Sidebar = ({
   activeSessionId: string | null
   onSelectSession: (s: Session) => void
   onNewChat: () => void
+  onDeleteSession: (sessionId: string) => void
 }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const formatTime = (iso: string) => {
     const d = new Date(iso)
@@ -173,6 +282,24 @@ const Sidebar = ({
     if (diffHours < 24) return `${diffHours}h ago`
     if (diffDays === 1) return "yesterday"
     return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+  }
+
+  const handleDeleteClick = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation()
+    setConfirmDeleteId(sessionId)
+  }
+
+  const handleConfirmDelete = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation()
+    setDeletingId(sessionId)
+    setConfirmDeleteId(null)
+    await onDeleteSession(sessionId)
+    setDeletingId(null)
+  }
+
+  const handleCancelDelete = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setConfirmDeleteId(null)
   }
 
   return (
@@ -191,20 +318,18 @@ const Sidebar = ({
 
       <div
         style={{
-          position: "absolute", top: 0, left: 0, bottom: 0,
-          width: 240,
-          zIndex: 11,
+          position: "absolute", top: 0, left: 0, bottom: 0, width: 240, zIndex: 11,
           background: "linear-gradient(175deg, #f0f7ff 0%, #eaf4fb 60%, #e8f6f8 100%)",
           borderRight: "1px solid rgba(22,183,194,0.15)",
           boxShadow: "4px 0 24px rgba(12,62,111,0.1)",
-          display: "flex",
-          flexDirection: "column",
+          display: "flex", flexDirection: "column",
           transform: open ? "translateX(0)" : "translateX(-100%)",
           opacity: open ? 1 : 0,
           transition: "transform 0.28s cubic-bezier(0.32,0,0.16,1), opacity 0.28s ease",
           pointerEvents: open ? "all" : "none",
         }}
       >
+        {/* Header */}
         <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid rgba(12,62,111,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img src={cc} alt="logo" style={{ width: 20, height: 20, opacity: 0.85 }} />
@@ -222,6 +347,7 @@ const Sidebar = ({
           </button>
         </div>
 
+        {/* New Chat */}
         <div style={{ padding: "10px 12px 8px" }}>
           <button
             onClick={() => { onNewChat(); onClose() }}
@@ -231,17 +357,10 @@ const Sidebar = ({
               background: "rgba(22,183,194,0.07)",
               color: "#0c3e6f", fontSize: 11.5, fontWeight: 500,
               cursor: "pointer", display: "flex", alignItems: "center", gap: 7,
-              transition: "all 0.18s ease", fontFamily: "inherit",
-              letterSpacing: "0.01em",
+              transition: "all 0.18s ease", fontFamily: "inherit", letterSpacing: "0.01em",
             }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = "rgba(22,183,194,0.14)"
-              e.currentTarget.style.borderColor = "#16B7C2"
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = "rgba(22,183,194,0.07)"
-              e.currentTarget.style.borderColor = "rgba(22,183,194,0.35)"
-            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(22,183,194,0.14)"; e.currentTarget.style.borderColor = "#16B7C2" }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(22,183,194,0.07)"; e.currentTarget.style.borderColor = "rgba(22,183,194,0.35)" }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16B7C2" strokeWidth="2.5" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -250,6 +369,7 @@ const Sidebar = ({
           </button>
         </div>
 
+        {/* Session List */}
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px 12px", scrollbarWidth: "none" }}>
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 4px" }}>
@@ -268,47 +388,116 @@ const Sidebar = ({
             sessions.map((s, i) => {
               const isActive = s.sessionId === activeSessionId
               const isHovered = hoveredId === s.sessionId
+              const isDeleting = deletingId === s.sessionId
+              const isConfirming = confirmDeleteId === s.sessionId
+
               return (
-                <button
+                <div
                   key={s.sessionId}
-                  onClick={() => { onSelectSession(s); onClose() }}
-                  onMouseEnter={() => setHoveredId(s.sessionId)}
-                  onMouseLeave={() => setHoveredId(null)}
                   style={{
-                    width: "100%", textAlign: "left", padding: "9px 12px",
-                    borderRadius: 10, border: "none", marginBottom: 3,
-                    background: isActive
-                      ? "rgba(22,183,194,0.12)"
-                      : isHovered
-                      ? "rgba(12,62,111,0.05)"
-                      : "transparent",
-                    cursor: "pointer", display: "flex", flexDirection: "column", gap: 3,
-                    transition: "background 0.15s ease",
+                    position: "relative", marginBottom: 3,
                     animation: `sessionItemIn 0.3s ease both`,
                     animationDelay: `${i * 40}ms`,
-                    outline: isActive ? "1px solid rgba(22,183,194,0.3)" : "none",
-                    fontFamily: "inherit",
                   }}
+                  onMouseEnter={() => setHoveredId(s.sessionId)}
+                  onMouseLeave={() => { setHoveredId(null); if (confirmDeleteId === s.sessionId) setConfirmDeleteId(null) }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 11.5, fontWeight: isActive ? 600 : 500, color: isActive ? "#0c3e6f" : "#1a3d5c", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                      {s.title || "New conversation"}
-                    </span>
-                    <span style={{ fontSize: 9.5, color: "#7a9bb5", flexShrink: 0, fontWeight: 400 }}>
-                      {formatTime(s.lastActiveAt)}
-                    </span>
-                  </div>
-                  {s.preview && (
-                    <span style={{ fontSize: 10.5, color: "#5a7fa0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 350, lineHeight: 1.4 }}>
-                      {s.preview}
-                    </span>
+                  {/* Confirm Delete Overlay */}
+                  {isConfirming && (
+                    <div style={{
+                      position: "absolute", inset: 0, zIndex: 5, borderRadius: 10,
+                      background: "rgba(255,240,240,0.97)",
+                      border: "1px solid rgba(220,53,69,0.25)",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "0 10px", gap: 6,
+                    }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <span style={{ fontSize: 10.5, color: "#b02a37", fontWeight: 500, lineHeight: 1.4 }}>Delete this chat?</span>
+                      <div style={{ display: "flex", gap: 5 }}>
+                        <button
+                          onClick={e => handleConfirmDelete(e, s.sessionId)}
+                          style={{
+                            fontSize: 10, fontWeight: 600, padding: "4px 9px", borderRadius: 6,
+                            border: "none", background: "#dc3545", color: "#fff",
+                            cursor: "pointer", fontFamily: "inherit",
+                          }}
+                        >Yes</button>
+                        <button
+                          onClick={handleCancelDelete}
+                          style={{
+                            fontSize: 10, fontWeight: 500, padding: "4px 9px", borderRadius: 6,
+                            border: "1px solid rgba(12,62,111,0.15)", background: "rgba(255,255,255,0.9)",
+                            color: "#3a6390", cursor: "pointer", fontFamily: "inherit",
+                          }}
+                        >No</button>
+                      </div>
+                    </div>
                   )}
-                  {s.messageCount > 0 && (
-                    <span style={{ fontSize: 9.5, color: "#7a9bb5", fontWeight: 400 }}>
-                      {s.messageCount} message{s.messageCount !== 1 ? "s" : ""}
-                    </span>
+
+                  <button
+                    onClick={() => { if (!isConfirming) { onSelectSession(s); onClose() } }}
+                    style={{
+                      width: "100%", textAlign: "left", padding: "9px 32px 9px 12px",
+                      borderRadius: 10, border: "none",
+                      background: isActive
+                        ? "rgba(22,183,194,0.12)"
+                        : isHovered
+                        ? "rgba(12,62,111,0.05)"
+                        : "transparent",
+                      cursor: isDeleting ? "default" : "pointer",
+                      display: "flex", flexDirection: "column", gap: 3,
+                      transition: "background 0.15s ease",
+                      outline: isActive ? "1px solid rgba(22,183,194,0.3)" : "none",
+                      fontFamily: "inherit",
+                      opacity: isDeleting ? 0.45 : 1,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11.5, fontWeight: isActive ? 600 : 500, color: isActive ? "#0c3e6f" : "#1a3d5c", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                        {isDeleting ? "Deleting…" : (s.title || "New conversation")}
+                      </span>
+                      <span style={{ fontSize: 9.5, color: "#7a9bb5", flexShrink: 0, fontWeight: 400 }}>
+                        {formatTime(s.lastActiveAt)}
+                      </span>
+                    </div>
+                    {s.preview && !isDeleting && (
+                      <span style={{ fontSize: 10.5, color: "#5a7fa0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 350, lineHeight: 1.4 }}>
+                        {s.preview}
+                      </span>
+                    )}
+                    {s.messageCount > 0 && !isDeleting && (
+                      <span style={{ fontSize: 9.5, color: "#7a9bb5", fontWeight: 400 }}>
+                        {s.messageCount} message{s.messageCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Delete Icon — shown on hover */}
+                  {isHovered && !isDeleting && !isConfirming && (
+                    <button
+                      onClick={e => handleDeleteClick(e, s.sessionId)}
+                      title="Delete conversation"
+                      style={{
+                        position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)",
+                        width: 22, height: 22, borderRadius: 6,
+                        border: "1px solid rgba(220,53,69,0.15)",
+                        background: "rgba(255,255,255,0.9)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", transition: "all 0.15s ease", zIndex: 2,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(220,53,69,0.1)"; e.currentTarget.style.borderColor = "rgba(220,53,69,0.35)" }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.9)"; e.currentTarget.style.borderColor = "rgba(220,53,69,0.15)" }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                      </svg>
+                    </button>
                   )}
-                </button>
+                </div>
               )
             })
           )}
@@ -369,7 +558,6 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     }
   }, [input])
 
-
   useEffect(() => {
     createSession().catch(err => console.error("Initial session create error:", err))
   }, [])
@@ -390,7 +578,6 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
         const id = json.data?.sessionId as string
         if (!id) throw new Error("No sessionId in response")
         sessionId.current = id
-        // ── FIX: state update karo taaki sidebar highlight sahi ho ──
         setActiveSessionId(id)
         return id
       })
@@ -402,7 +589,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     return sessionPromise.current
   }, [authToken])
 
-  // ─── Fetch all sessions for sidebar ───────────────────────────────────────
+  // ─── Fetch sessions ────────────────────────────────────────────────────────
   const fetchSessions = async () => {
     setSessionsLoading(true)
     try {
@@ -419,7 +606,36 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     }
   }
 
-  // ─── Fetch messages for a session ─────────────────────────────────────────
+  // ─── Delete session ────────────────────────────────────────────────────────
+  const handleDeleteSession = async (sid: string) => {
+    try {
+      const res = await fetch(`${SESSION_API_URL}/${sid}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
+      if (!res.ok) throw new Error("Delete failed")
+
+      // Remove from local list
+      setSessions(prev => prev.filter(s => s.sessionId !== sid))
+
+      // If deleting active session → reset to new chat
+      if (sid === sessionId.current) {
+        sessionId.current = null
+        sessionPromise.current = null
+        setActiveSessionId(null)
+        setMessages([INIT_MSG])
+        setInput("")
+        setShowPrompts(true)
+        setError(null)
+        setTyping(false)
+        createSession().catch(err => console.error("New session after delete:", err))
+      }
+    } catch (err) {
+      console.error("Delete session error:", err)
+    }
+  }
+
+  // ─── Fetch session messages ────────────────────────────────────────────────
   const fetchSessionMessages = async (sid: string): Promise<Message[]> => {
     const res = await fetch(`${SESSION_API_URL}/${sid}`, {
       headers: { Authorization: `Bearer ${authToken}` },
@@ -434,13 +650,11 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     }))
   }
 
-  // ─── Open sidebar ─────────────────────────────────────────────────────────
   const handleOpenSidebar = () => {
     setSidebarOpen(true)
     fetchSessions()
   }
 
-  // ─── Select a past session ────────────────────────────────────────────────
   const handleSelectSession = async (s: Session) => {
     sessionId.current = s.sessionId
     sessionPromise.current = Promise.resolve(s.sessionId)
@@ -451,9 +665,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     setTyping(true)
     try {
       const msgs = await fetchSessionMessages(s.sessionId)
-      if (msgs.length > 0) {
-        setMessages(msgs)
-      }
+      if (msgs.length > 0) setMessages(msgs)
     } catch (err) {
       console.error("Load session messages error:", err)
       setError("Could not load previous messages.")
@@ -463,7 +675,6 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     }
   }
 
-  // ─── New chat ─────────────────────────────────────────────────────────────
   const handleNewChat = () => {
     sessionId.current = null
     sessionPromise.current = null
@@ -480,9 +691,8 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     setInput(e.target.value)
   }
 
-  // ─── Fetch AI reply ───────────────────────────────────────────────────────
-  const fetchAIReply = async (message: string): Promise<string> => {
-    // ── FIX: session guaranteed hai (mount par ban chuki), bas await karo ──
+  // ─── Fetch AI reply (now returns full data incl. crisis info) ──────────────
+  const fetchAIReply = async (message: string): Promise<{ reply: string; isCrisis: boolean; helplines: Helpline[] }> => {
     const sid = await createSession()
     const response = await fetch(VENT_API_URL, {
       method: "POST",
@@ -492,7 +702,11 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
     const json = await response.json()
     if (!json.success || !json.data?.reply) throw new Error("Invalid response from server")
-    return json.data.reply as string
+    return {
+      reply: json.data.reply as string,
+      isCrisis: json.data.isCrisis === true,
+      helplines: Array.isArray(json.data.helplines) ? json.data.helplines : [],
+    }
   }
 
   // ─── Send ─────────────────────────────────────────────────────────────────
@@ -505,8 +719,14 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     setError(null)
     scrollBottom()
     try {
-      const reply = await fetchAIReply(text.trim())
-      setMessages(p => [...p, { id: Date.now() + "a", role: "ai", text: reply }])
+      const { reply, isCrisis, helplines } = await fetchAIReply(text.trim())
+      setMessages(p => [...p, {
+        id: Date.now() + "a",
+        role: "ai",
+        text: reply,
+        isCrisis,
+        helplines,
+      }])
     } catch (err) {
       console.error("Vent API error:", err)
       setError("Something went wrong. Please try again.")
@@ -531,9 +751,10 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
+        onDeleteSession={handleDeleteSession}
       />
 
-      {/* TopBar with history button */}
+      {/* TopBar */}
       <div style={{ position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           <button
@@ -548,16 +769,8 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
               transition: "all 0.18s ease", color: "#3a6390",
             }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = "rgba(22,183,194,0.1)"
-              e.currentTarget.style.borderColor = "rgba(22,183,194,0.4)"
-              e.currentTarget.style.color = "#0c3e6f"
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.7)"
-              e.currentTarget.style.borderColor = "rgba(12,62,111,0.12)"
-              e.currentTarget.style.color = "#3a6390"
-            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(22,183,194,0.1)"; e.currentTarget.style.borderColor = "rgba(22,183,194,0.4)"; e.currentTarget.style.color = "#0c3e6f" }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.7)"; e.currentTarget.style.borderColor = "rgba(12,62,111,0.12)"; e.currentTarget.style.color = "#3a6390" }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="3" y1="12" x2="21" y2="12" />
