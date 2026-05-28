@@ -29,6 +29,8 @@ interface Message {
   text: string
   isCrisis?: boolean
   helplines?: Helpline[]
+  suggestTherapy?: boolean
+  platformUrl?: string
 }
 
 // ─── Typing Dots ─────────────────────────────────────────────────────────────
@@ -229,6 +231,86 @@ const CrisisCard = ({ helplines }: { helplines: Helpline[] }) => {
   )
 }
 
+// ─── Therapy Card ─────────────────────────────────────────────────────────────
+const TherapyCard = ({ platformUrl }: { platformUrl: string }) => {
+  const [hover, setHover] = useState(false)
+
+  return (
+    <div
+      style={{
+        margin: "4px 0 4px 37px",
+        background: "rgba(255,255,255,0.92)",
+        border: "1px solid rgba(22,183,194,0.22)",
+        borderLeft: "3px solid #16B7C2",
+        borderRadius: "0 12px 12px 12px",
+        padding: "12px 14px",
+        animation: "crisisIn 0.35s ease both",
+        boxShadow: "0 2px 12px rgba(22,183,194,0.07)",
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+        <div style={{
+          width: 22, height: 22, borderRadius: 6,
+          background: "rgba(22,183,194,0.1)",
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16B7C2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </div>
+        <div>
+          <div style={{ fontSize: 11.5, fontWeight: 650, color: "#0c3e6f", letterSpacing: "0.01em" }}>
+            Talk to a therapist
+          </div>
+          <div style={{ fontSize: 10, color: "#3a6390", marginTop: 1, fontWeight: 400 }}>
+            Professional support, matched to you
+          </div>
+        </div>
+      </div>
+
+      {/* CTA Link */}
+      <a
+        href={platformUrl}
+        target="_blank"
+        rel="noreferrer"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "8px 11px", borderRadius: 9, textDecoration: "none",
+          background: hover ? "rgba(22,183,194,0.12)" : "rgba(22,183,194,0.06)",
+          border: `1px solid ${hover ? "rgba(22,183,194,0.45)" : "rgba(22,183,194,0.22)"}`,
+          transition: "all 0.16s ease",
+          animation: "crisisIn 0.35s ease both",
+          animationDelay: "100ms",
+        }}
+      >
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: "#0c3e6f" }}>
+          Browse therapists on CatalystCare
+        </span>
+        <div style={{
+          width: 24, height: 24, borderRadius: 7, flexShrink: 0,
+          background: hover ? "#16B7C2" : "rgba(22,183,194,0.12)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all 0.16s ease",
+        }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+            stroke={hover ? "#fff" : "#16B7C2"}
+            strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
+        </div>
+      </a>
+
+      <div style={{ marginTop: 9, fontSize: 9.5, color: "#5a7fa0", lineHeight: 1.5, fontWeight: 400 }}>
+        💙 Finding the right therapist can make a real difference. It's okay to ask for help.
+      </div>
+    </div>
+  )
+}
+
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 const MessageBubble = ({ msg, index }: { msg: Message; index: number }) => {
   const isAi = msg.role === "ai"
@@ -248,6 +330,11 @@ const MessageBubble = ({ msg, index }: { msg: Message; index: number }) => {
       {/* Crisis card shown below AI message if isCrisis */}
       {isAi && msg.isCrisis && msg.helplines && msg.helplines.length > 0 && (
         <CrisisCard helplines={msg.helplines} />
+      )}
+
+      {/* Therapy card shown below AI message if suggestTherapy */}
+      {isAi && msg.suggestTherapy && msg.platformUrl && (
+        <TherapyCard platformUrl={msg.platformUrl} />
       )}
     </div>
   )
@@ -370,7 +457,11 @@ const Sidebar = ({
         </div>
 
         {/* Session List */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px 12px", scrollbarWidth: "none" }}>
+        <div style={{
+          flex: 1, overflowY: "auto", padding: "4px 8px 12px",
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(22,183,194,0.35) transparent",
+        }}>
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 4px" }}>
               {[1, 2, 3].map(i => (
@@ -443,8 +534,8 @@ const Sidebar = ({
                       background: isActive
                         ? "rgba(22,183,194,0.12)"
                         : isHovered
-                        ? "rgba(12,62,111,0.05)"
-                        : "transparent",
+                          ? "rgba(12,62,111,0.05)"
+                          : "transparent",
                       cursor: isDeleting ? "default" : "pointer",
                       display: "flex", flexDirection: "column", gap: 3,
                       transition: "background 0.15s ease",
@@ -615,10 +706,8 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
       })
       if (!res.ok) throw new Error("Delete failed")
 
-      // Remove from local list
       setSessions(prev => prev.filter(s => s.sessionId !== sid))
 
-      // If deleting active session → reset to new chat
       if (sid === sessionId.current) {
         sessionId.current = null
         sessionPromise.current = null
@@ -691,8 +780,14 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     setInput(e.target.value)
   }
 
-  // ─── Fetch AI reply (now returns full data incl. crisis info) ──────────────
-  const fetchAIReply = async (message: string): Promise<{ reply: string; isCrisis: boolean; helplines: Helpline[] }> => {
+  // ─── Fetch AI reply ────────────────────────────────────────────────────────
+  const fetchAIReply = async (message: string): Promise<{
+    reply: string
+    isCrisis: boolean
+    helplines: Helpline[]
+    suggestTherapy: boolean
+    platformUrl: string
+  }> => {
     const sid = await createSession()
     const response = await fetch(VENT_API_URL, {
       method: "POST",
@@ -706,6 +801,8 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
       reply: json.data.reply as string,
       isCrisis: json.data.isCrisis === true,
       helplines: Array.isArray(json.data.helplines) ? json.data.helplines : [],
+      suggestTherapy: !!json.data.suggestTherapy,
+      platformUrl: json.data.platformUrl || "https://catalystcare.in/therapists",
     }
   }
 
@@ -719,13 +816,15 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     setError(null)
     scrollBottom()
     try {
-      const { reply, isCrisis, helplines } = await fetchAIReply(text.trim())
+      const { reply, isCrisis, helplines, suggestTherapy, platformUrl } = await fetchAIReply(text.trim())
       setMessages(p => [...p, {
         id: Date.now() + "a",
         role: "ai",
         text: reply,
         isCrisis,
         helplines,
+        suggestTherapy,
+        platformUrl,
       }])
     } catch (err) {
       console.error("Vent API error:", err)
@@ -779,7 +878,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
             </svg>
           </button>
           <div style={{ flex: 1 }}>
-            <TopBar title="Your Companion" onBack={onBack} />
+            <TopBar title="Cove" onBack={onBack} />
           </div>
         </div>
       </div>

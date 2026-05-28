@@ -349,7 +349,10 @@ function initWidget(iconSrc: string) {
     isOpen = true; fab.classList.add("cc-open")
     r1.classList.add("cc-vis"); r2.classList.add("cc-vis")
     bd = document.createElement("div"); bd.id = "cc-bd"
-    bd.addEventListener("click", () => { subOpen ? closeSubNodes() : closeMenu() })
+    bd.addEventListener("click", (e) => {
+      if (document.getElementById("cc-root-container")?.contains(e.target as Node)) return
+      subOpen ? closeSubNodes() : closeMenu()
+    })
     document.body.appendChild(bd)
 
     const fr = fab.getBoundingClientRect()
@@ -420,7 +423,8 @@ function initWidget(iconSrc: string) {
 
   window.addEventListener(CC_OPEN_MENU, openMenu)
 
-  fab.addEventListener("click", () => {
+  fab.addEventListener("click", (e) => {
+    e.stopPropagation()
     if (fab.classList.contains("cc-pomo-active")) {
       dispatch(CC_OPEN, { screen: "pomodoro" }); return
     }
@@ -487,7 +491,7 @@ function injectGlobalStyles() {
       background: #ffffff !important; overflow: hidden !important;
     }
     #cc-fab:hover { transform: scale(1.1) !important; }
-    #cc-fab.cc-open { transform: rotate(45deg) scale(1.05) !important; animation: none !important; }
+    #cc-fab.cc-open { transform: scale(1.05) !important; animation: none !important; }
     #cc-fab.cc-pomo-active {
       background: #0c3e6f !important;
       animation: ccPomoRing 1.8s ease infinite !important;
@@ -632,27 +636,29 @@ function DraggableShell({ onClose, children, wide }: { onClose: () => void; chil
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483646, pointerEvents: "none", isolation: "isolate" }}>
-      <div style={{
-        position: "absolute", left: pos.x, top: pos.y,
-        width: currentW, height: DIALOG_H, borderRadius: 20,
-        background: "rgba(239,246,255,0.96)",
-        backdropFilter: "blur(20px) saturate(1.5)", WebkitBackdropFilter: "blur(20px) saturate(1.5)",
-        boxShadow: "0 24px 64px rgba(8,28,58,.28), 0 4px 16px rgba(8,28,58,.12), 0 0 0 1px rgba(12,62,111,.08)",
-        overflow: "hidden", display: "flex", flexDirection: "column", pointerEvents: "auto",
-        transform: visible ? "scale(1) translateY(0)" : "scale(.94) translateY(12px)",
-        opacity: visible ? 1 : 0,
-        transition: "transform .34s cubic-bezier(.34,1.56,.64,1), opacity .24s ease, width .28s cubic-bezier(.4,0,.2,1)",
-      }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "absolute", left: pos.x, top: pos.y,
+          width: currentW, height: DIALOG_H, borderRadius: 20,
+          background: "rgba(239,246,255,0.96)",
+          backdropFilter: "blur(20px) saturate(1.5)", WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+          boxShadow: "0 24px 64px rgba(8,28,58,.28), 0 4px 16px rgba(8,28,58,.12), 0 0 0 1px rgba(12,62,111,.08)",
+          overflow: "hidden", display: "flex", flexDirection: "column", pointerEvents: "auto",
+          transform: visible ? "scale(1) translateY(0)" : "scale(.94) translateY(12px)",
+          opacity: visible ? 1 : 0,
+          transition: "transform .34s cubic-bezier(.34,1.56,.64,1), opacity .24s ease, width .28s cubic-bezier(.4,0,.2,1)",
+        }}>
         <div onMouseDown={onMouseDown} style={{ position: "absolute", top: 0, left: 52, right: 72, height: 52, cursor: "grab", zIndex: 10 }} />
         <div style={{ position: "absolute", top: 5, right: 14, display: "flex", alignItems: "center", gap: 6, zIndex: 20 }}>
           <button
-            onClick={() => setExpanded(v => !v)}
+            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}
             style={{ width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(12,62,111,.12)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 11, color: "#6a8fab", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .18s", outline: "none" }}
             onMouseEnter={e => { e.currentTarget.style.background = "#16B7C2"; e.currentTarget.style.color = "#fff" }}
             onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.7)"; e.currentTarget.style.color = "#6a8fab" }}
           >{expanded ? "⇤" : "⇥"}</button>
           <button
-            onClick={onClose}
+            onClick={(e) => { e.stopPropagation(); onClose() }}
             style={{ width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(12,62,111,.12)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 13, color: "#6a8fab", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .18s", outline: "none" }}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(220,60,60,.9)"; e.currentTarget.style.color = "#fff" }}
             onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.7)"; e.currentTarget.style.color = "#6a8fab" }}
@@ -668,7 +674,7 @@ function DraggableShell({ onClose, children, wide }: { onClose: () => void; chil
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  AUTO QUOTE BUBBLE — now shows feeling badge
+//  AUTO QUOTE BUBBLE
 // ══════════════════════════════════════════════════════════════════════════════
 function AutoQuoteBubble({
   text, author, feeling, onDismiss, onOpen
@@ -700,12 +706,6 @@ function AutoQuoteBubble({
       </div>
       <div style={{ borderRadius: 16, background: "rgba(239,246,255,0.96)", backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)", boxShadow: "0 12px 40px rgba(8,28,58,.22), 0 0 0 1px rgba(12,62,111,.1)", padding: "14px 16px 12px", position: "relative" }}>
         <button onClick={dismiss} style={{ position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "#8aadcc", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }}>×</button>
-
-        {/* Feeling badge */}
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 99, background: "rgba(22,183,194,.08)", border: "1px solid rgba(22,183,194,.2)", fontSize: 10, color: "#16B7C2", fontWeight: 500, marginBottom: 8 }}>
-          {feeling.symbol} {feeling.label}
-        </div>
-
         <p style={{ margin: "0 20px 6px 0", fontSize: 12.5, fontWeight: 300, lineHeight: 1.6, color: "#0c3e6f", fontStyle: "italic" }}>"{text}"</p>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 10, color: "#8aadcc", letterSpacing: "0.6px" }}>— {author}</span>
@@ -759,7 +759,6 @@ export default function Widget() {
       if (activeScreenRef.current) return
       if (!QUOTES.length) return
       const q = QUOTES[Math.floor(Math.random() * QUOTES.length)]
-      // Pass feeling from the quote directly
       setAutoQuote({ text: q.text, author: q.author, feeling: q.feeling })
     }
     window.addEventListener(CC_AUTO_QUOTE, onAutoQuote)
@@ -787,7 +786,14 @@ export default function Widget() {
     }
   }, [isAuthenticated, isHydrated])
 
-  const closeScreen    = () => { setActiveScreen(null); dispatch(CC_CLOSE) }
+  // ✅ FIX: Sirf authenticated hone par hi menu kholo
+  const closeScreen = () => {
+    setActiveScreen(null)
+    if (isAuthenticated) {
+      setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 50)
+    }
+  }
+
   const minimizeScreen = () => setActiveScreen(null)
 
   const handleAuthSuccess = () => {
