@@ -18,17 +18,18 @@ apiClient.interceptors.request.use((config) => {
 
 // ── Auth API calls ─────────────────────────────────────────────
 export const authApi = {
-  login: (email: string, password: string) =>
-    apiClient.post("/auth/login", { email, password }),
+  login: (email: string, password: string, source?: string) =>
+  apiClient.post("/auth/login", { email, password, ...(source && { source }) }),
 
-  register: (body: {
-    firstName: string
-    lastName: string
-    email: string
-    mobileNumber: string
-    password: string
-    role?: string
-  }) => apiClient.post("/auth/register", { ...body, role: "CLIENT" }),
+ register: (body: {
+  firstName: string
+  lastName: string
+  email: string
+  mobileNumber: string
+  password: string
+  role?: string
+  source?: string  
+}) => apiClient.post("/auth/register", { ...body, role: "CLIENT" }),
 
   verifyOtp: (
     email: string,
