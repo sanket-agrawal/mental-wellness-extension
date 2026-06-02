@@ -7,8 +7,8 @@ export const useLogin = () => {
   const { setUser, setAuthToken } = useAuthStore()
 
   return useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      authApi.login(email, password),
+    mutationFn: ({ email, password, source }: { email: string; password: string; source?: string }) =>
+  authApi.login(email, password, source),
 
     onSuccess: (res) => {
       const { user, token } = res.data.data
@@ -31,13 +31,14 @@ export const useRegister = () => {
   const { setAuthToken } = useAuthStore()
 
   return useMutation({
-    mutationFn: (body: {
-      firstName: string
-      lastName: string
-      email: string
-      mobileNumber: string
-      password: string
-    }) => authApi.register(body),
+   mutationFn: (body: {
+  firstName: string
+  lastName: string
+  email: string
+  mobileNumber: string
+  password: string
+  source?: string  
+}) => authApi.register(body),
 
     onSuccess: (res) => {
       const token = res.data.data?.signupToken || res.data.data?.token

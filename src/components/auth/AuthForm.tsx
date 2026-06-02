@@ -430,7 +430,7 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ idToken })
+                    body: JSON.stringify({ idToken,source: "EXTENSION" })
                 }
             )
             const data = await res.json()
@@ -493,7 +493,7 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
         e.preventDefault()
         if (!email || !password) return toastError("Please fill all fields")
         try {
-            const res = await login.mutateAsync({ email: email.trim().toLowerCase(), password })
+            const res = await login.mutateAsync({ email: email.trim().toLowerCase(), password,source: "EXTENSION" })
             if (!res.data.success) {
                 if (res.data.message === "User not found") {
                     toastError("Account not found. Please sign up.")
@@ -517,7 +517,8 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
                 lastName: lastName.trim(),
                 email: email.trim().toLowerCase(),
                 mobileNumber: phone.trim(),
-                password
+                password,
+                source: "EXTENSION"
             })
             if (!res.data.success) return toastError(res.data.message || "Signup failed")
             const token = res.data.data?.signupToken || res.data.data?.token
