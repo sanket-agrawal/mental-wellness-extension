@@ -45,16 +45,19 @@ function App() {
 
   useEffect(() => {
     const init = async () => {
-      const requested = await storage.get<Screen>("cc_initial_screen")
+      const requested = await storage.get<string>("cc_initial_screen")
 
-      if (requested && requested !== "menu") {
-        if (requested === "quote") {
-          setQuoteIdx(Math.floor(Math.random() * QUOTES.length))
-        }
-
-        setScreen(requested)
-
+      if (requested) {
         await storage.remove("cc_initial_screen")
+
+        // "auth" is handled automatically — popup shows AuthForm when !isAuthenticated
+        if (requested !== "menu" && requested !== "auth") {
+          if (requested === "quote") {
+            setQuoteIdx(Math.floor(Math.random() * QUOTES.length))
+          }
+
+          setScreen(requested as Screen)
+        }
       }
 
       setTimeout(() => setVisible(true), 60)
