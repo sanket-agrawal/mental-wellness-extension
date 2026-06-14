@@ -36,8 +36,20 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "key": "$PLASMO_PUBLIC_CRX_KEY",
+    "permissions": [
+      "storage",
+      "identity"
+    ],
     "host_permissions": [
       "https://*/*"
-    ]
+    ],
+    "oauth2": {
+      "client_id": "$PLASMO_PUBLIC_GOOGLE_CLIENT_ID",
+      "scopes": [
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile"
+      ]
+    }
   }
 }

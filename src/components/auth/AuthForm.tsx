@@ -352,7 +352,7 @@ interface AuthFormProps {
 
 // ── Main AuthForm ──────────────────────────────────────────────
 export default function AuthForm({ onSuccess }: AuthFormProps) {
-    const { setUser } = useAuthStore()
+    const { setUser, setAuthToken } = useAuthStore()
     const { toasts, success, error: toastError } = useToast()
 
     const [mode, setMode] = useState<Mode>("login")
@@ -426,7 +426,7 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
             const idToken = params.get("id_token")
             if (!idToken) { toastError("Failed to get ID token from Google"); return }
             const res = await fetch(
-                `${process.env.PLASMO_PUBLIC_NEW_API_URL}/api/v1/auth/google-signin`,
+                `${process.env.PLASMO_PUBLIC_API_URL}/api/v1/auth/google-signin`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -438,7 +438,7 @@ export default function AuthForm({ onSuccess }: AuthFormProps) {
             const { token, user } = data.data
             if (!token || !user) { toastError("Invalid server response"); return }
             setUser(user)
-            await chrome.storage.local.set({ authToken: token, user })
+            setAuthToken(token)
             success("Google Login Successful! 🎉")
             onSuccess?.()
         } catch (err: any) {
