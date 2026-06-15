@@ -7,7 +7,7 @@ import {
   Wind, Music, type LucideIcon
 } from "lucide-react"
 import icon from "data-base64:~assets/icon.png"
-
+import AuthForm from "~src/components/auth/AuthForm"
 import { useAuthStore } from "~src/lib/hooks/useAuthStore"
 import { ChatScreen } from "~src/components/features/Ai/ChatScreen"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -717,6 +717,26 @@ function AutoQuoteBubble({
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  AUTH SCREEN
+// ══════════════════════════════════════════════════════════════════════════════
+class ErrorBoundary extends React.Component<{ fallback: React.ReactNode; children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(e: any) { console.error("AuthForm crashed:", e) }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children }
+}
+
+function AuthScreen({ onSuccess }: { onSuccess: () => void; onClose: () => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
+      <ErrorBoundary fallback={<div style={{ padding: 20, color: "red", fontSize: 12 }}>Auth failed to load.</div>}>
+        <AuthForm onSuccess={onSuccess} />
+      </ErrorBoundary>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  ROOT REACT COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Widget() {
@@ -734,33 +754,22 @@ export default function Widget() {
   }, [])
   useEffect(() => { initWidget(icon) }, [])
 
-  // Show/hide the FAB and rings based on authentication state
-  useEffect(() => {
-    const fab = document.getElementById("cc-fab")
-    const r1 = document.getElementById("cc-r1")
-    const r2 = document.getElementById("cc-r2")
-    const shouldShow = isHydrated && isAuthenticated
-    if (fab) fab.style.display = shouldShow ? "flex" : "none"
-    if (r1) r1.style.display = shouldShow ? "" : "none"
-    if (r2) r2.style.display = shouldShow ? "" : "none"
-  }, [isAuthenticated, isHydrated])
-
   useEffect(() => {
     const onAutoQuote = () => {
       if (activeScreenRef.current) return
-      if (!isAuthenticated) return
       if (!QUOTES.length) return
       const q = QUOTES[Math.floor(Math.random() * QUOTES.length)]
       setAutoQuote({ text: q.text, author: q.author, feeling: q.feeling })
     }
     window.addEventListener(CC_AUTO_QUOTE, onAutoQuote)
     return () => window.removeEventListener(CC_AUTO_QUOTE, onAutoQuote)
-  }, [isAuthenticated])
+  }, [])
 
   useEffect(() => {
     const onFabClick = () => {
       if (!isHydrated) return
-      window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
+      if (!isAuthenticated) setActiveScreen("auth")
+      else window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
     }
     const onOpen  = (e: Event) => {
       const screen = (e as CustomEvent<{ screen: string }>).detail?.screen
@@ -775,7 +784,7 @@ export default function Widget() {
       window.removeEventListener(CC_OPEN,  onOpen)
       window.removeEventListener(CC_CLOSE, onClose)
     }
-  }, [isHydrated])
+  }, [isAuthenticated, isHydrated])
 
   // ✅ FIX: Sirf authenticated hone par hi menu kholo
   const closeScreen = () => {
@@ -787,8 +796,15 @@ export default function Widget() {
 
   const minimizeScreen = () => setActiveScreen(null)
 
+  const handleAuthSuccess = () => {
+    setActiveScreen(null)
+    setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+  }
+
   const screenEl = (() => {
     switch (activeScreen) {
+      case "auth":
+        return <AuthScreen onSuccess={handleAuthSuccess} onClose={closeScreen} />
       case "chat":
         return <ChatScreen onBack={closeScreen} />
       case "breathe":
@@ -809,6 +825,7 @@ export default function Widget() {
     }
   })()
 
+  const isAuthScreen = activeScreen === "auth"
   const shellOnClose = activeScreen === "pomodoro" ? minimizeScreen : closeScreen
 
   if (!overlayRoot) return null
@@ -827,7 +844,7 @@ export default function Widget() {
         />
       )}
       {screenEl && (
-        <DraggableShell onClose={shellOnClose}>
+        <DraggableShell onClose={shellOnClose} wide={isAuthScreen}>
           {screenEl}
         </DraggableShell>
       )}

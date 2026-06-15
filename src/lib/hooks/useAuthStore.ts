@@ -68,30 +68,5 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     } catch {}
     set({ isHydrated: true })
-
-    // Watch for cross-context storage changes (e.g. popup logout → widget updates)
-    storage.watch({
-      cc_token: (change) => {
-        const newToken = change.newValue as string | undefined
-        if (!newToken) {
-          // Token was removed (logout from another context)
-          set({ user: null, authToken: null, isAuthenticated: false })
-        } else {
-          set({ authToken: newToken })
-        }
-      },
-      cc_user: (change) => {
-        const newUserRaw = change.newValue as string | undefined
-        if (!newUserRaw) {
-          // User was removed (logout from another context)
-          set({ user: null, authToken: null, isAuthenticated: false })
-        } else {
-          try {
-            const user = JSON.parse(newUserRaw) as UserInfo
-            set({ user, isAuthenticated: true })
-          } catch {}
-        }
-      },
-    })
   }
 }))
