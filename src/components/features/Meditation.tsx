@@ -7,7 +7,7 @@ export const BREATHE_STEPS = [
   { label: "Exhale",  duration: 6, instruction: "Release slowly through your mouth. Let everything go." },
 ]
 
-export function BreatheScreen({ onBack }: { onBack: () => void }) {
+export function BreatheScreen({ onBack ,hideBackButton }: { onBack: () => void,hideBackButton?:boolean }) {
   const [active, setActive] = useState(false)
   const [stepIdx, setStepIdx] = useState(0)
   const [elapsed, setElapsed] = useState(0)
@@ -40,7 +40,7 @@ export function BreatheScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 420 }}>
-      <TopBar title="Breathe" onBack={onBack} />
+      <TopBar title="Breathe" onBack={onBack} showBack={!hideBackButton}/>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 32px", gap: 0 }}>
         {round > 0 && (
           <div style={{ fontSize: 10, letterSpacing: "2px", textTransform: "uppercase", color: "#6a8fab", marginBottom: 16 }}>

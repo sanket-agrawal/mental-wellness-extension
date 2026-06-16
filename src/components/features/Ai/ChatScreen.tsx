@@ -618,7 +618,7 @@ const UnauthenticatedFallback = ({ onBack }: { onBack: () => void }) => (
 )
 
 // ─── Chat Screen Inner ────────────────────────────────────────────────────────
-const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken: string }) => {
+const ChatScreenInner = ({ onBack, authToken, hideBackButton }: { onBack: () => void; authToken: string; hideBackButton?: boolean }) => {
   const INIT_MSG: Message = {
     id: "init", role: "ai",
     text: "Hey, I'm here with you. This is a safe, private space — no judgment, no rush. What's been on your mind?",
@@ -815,6 +815,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     setTyping(true)
     setError(null)
     scrollBottom()
+    requestAnimationFrame(() => textareaRef.current?.focus())
     try {
       const { reply, isCrisis, helplines, suggestTherapy, platformUrl } = await fetchAIReply(text.trim())
       setMessages(p => [...p, {
@@ -832,6 +833,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
     } finally {
       setTyping(false)
       scrollBottom()
+      requestAnimationFrame(() => textareaRef.current?.focus())
     }
   }
 
@@ -878,7 +880,7 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
             </svg>
           </button>
           <div style={{ flex: 1 }}>
-            <TopBar title="Cove" onBack={onBack} />
+            <TopBar title="Cove" onBack={onBack} showBack={!hideBackButton} />
           </div>
         </div>
       </div>
@@ -930,8 +932,16 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(input) } }}
           placeholder="Share what's on your mind…"
           rows={1}
-          disabled={typing}
-          style={{ flex: 1, fontSize: 12.5, fontWeight: 350, lineHeight: 1.65, letterSpacing: "0.005em", padding: "9px 13px", borderRadius: 13, resize: "none", outline: "none", border: "1px solid rgba(12,62,111,0.12)", background: typing ? "rgba(248,251,255,0.7)" : "rgba(255,255,255,0.95)", color: "#0c3e6f", fontFamily: "inherit", opacity: typing ? 0.65 : 1, transition: "border-color 0.18s ease, box-shadow 0.18s ease", boxShadow: "0 1px 4px rgba(12,62,111,0.05)", overflow: "hidden", maxHeight: 96 }}
+          style={{
+            flex: 1, fontSize: 12.5, fontWeight: 350, lineHeight: 1.65, letterSpacing: "0.005em",
+            padding: "9px 13px", borderRadius: 13, resize: "none", outline: "none",
+            border: "1px solid rgba(12,62,111,0.12)",
+            background: "rgba(255,255,255,0.95)",
+            color: "#0c3e6f", fontFamily: "inherit",
+            transition: "border-color 0.18s ease, box-shadow 0.18s ease",
+            boxShadow: "0 1px 4px rgba(12,62,111,0.05)",
+            overflow: "hidden", maxHeight: 96,
+          }}
           onFocus={e => { e.currentTarget.style.borderColor = "rgba(22,183,194,0.5)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,183,194,0.1)" }}
           onBlur={e => { e.currentTarget.style.borderColor = "rgba(12,62,111,0.12)"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(12,62,111,0.05)" }}
         />
@@ -942,9 +952,9 @@ const ChatScreenInner = ({ onBack, authToken }: { onBack: () => void; authToken:
 }
 
 // ─── Exported Wrapper ─────────────────────────────────────────────────────────
-export const ChatScreen = ({ onBack }: { onBack: () => void }) => {
+export const ChatScreen = ({ onBack, hideBackButton }: { onBack: () => void; hideBackButton?: boolean }) => {
   const isAuthenticated = useIsAuthenticated()
   const authToken = useAuthStore(s => s.authToken)
   if (!isAuthenticated) return <UnauthenticatedFallback onBack={onBack} />
-  return <ChatScreenInner onBack={onBack} authToken={authToken!} />
+  return <ChatScreenInner onBack={onBack} authToken={authToken!} hideBackButton={hideBackButton} />
 }
