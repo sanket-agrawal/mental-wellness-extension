@@ -36,6 +36,11 @@
     "typescript": "5.3.3"
   },
   "manifest": {
+    "key": "$PLASMO_PUBLIC_CRX_KEY",
+    "permissions": [
+      "storage",
+      "identity"
+    ],
     "host_permissions": [
       "https://*/*"
     ],
