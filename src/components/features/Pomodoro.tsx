@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { pomoTimer, LABELS, type PomodoroMode, type PomoState } from "~src/lib/helpers/pomodoroTimer"
+import { TopBar } from "~src/components/Topbar"
 
 // ─── Format mm:ss ─────────────────────────────────────────────────────────────
 function fmt(s: number) {
@@ -78,9 +79,11 @@ function IconBtn({ onClick, title, children }: { onClick: () => void; title?: st
 export function PomodoroScreen({
   onBack,
   onMinimize,
+  hideBackButton
 }: {
   onBack: () => void
   onMinimize?: () => void
+  hideBackButton?: boolean
 }) {
   const [pomo, setPomo] = useState<PomoState>(pomoTimer.getState)
   const [customVal, setCustomVal] = useState("")
@@ -135,75 +138,23 @@ export function PomodoroScreen({
 
       {toast && <Toast message={toast.message} sub={toast.sub} visible={toastVisible} />}
 
-      {/* Header */}
-      <div
-        style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "18px 20px 14px",
-          borderBottom: "1px solid rgba(12,62,111,.08)",
-          flexShrink: 0,
-        }}
-      >
-        {/* Center Content */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 2,
-          }}
-        >
+      <TopBar title="Focus Timer" onBack={onMinimize ?? onBack} showBack={!hideBackButton} />
+
+      {running && (
+        <div style={{ textAlign: "center", padding: "6px 0 0" }}>
           <span
             style={{
-              fontSize: 13,
+              fontSize: 9,
+              color: "#16B7C2",
+              letterSpacing: "1px",
+              textTransform: "uppercase",
               fontWeight: 500,
-              color: "#0c3e6f",
             }}
           >
-            Focus Timer
+            {mode === "focus" ? "● Focusing" : "● On Break"}
           </span>
-
-          {running && (
-            <span
-              style={{
-                fontSize: 9,
-                color: "#16B7C2",
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
-            >
-              {mode === "focus" ? "● Focusing" : "● On Break"}
-            </span>
-          )}
         </div>
-
-        {/* Right Button */}
-        <button
-          onClick={onMinimize}
-          title="Minimize — timer keeps running"
-          style={{
-            position: "absolute",
-            right: 20,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontSize: 13,
-            color: "#6a8fab",
-            padding: "4px 8px",
-            borderRadius: 6,
-            lineHeight: 1,
-            transition: "color .18s",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#16B7C2")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#6a8fab")}
-        >
-          ⌃
-        </button>
-      </div>
+      )}
 
       {/* Body */}
       <div style={{

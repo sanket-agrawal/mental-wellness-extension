@@ -50,6 +50,12 @@
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile"
       ]
-    }
+    },
+    "web_accessible_resources": [
+      {
+        "resources": ["tabs/auth.html"],
+        "matches": ["<all_urls>"]
+      }
+    ]
   }
 }

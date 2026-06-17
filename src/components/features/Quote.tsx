@@ -2,7 +2,7 @@ import { FEELING_OPTIONS, QUOTES } from "~src/lib/constants/contant"
 import { useState, useMemo } from "react"
 import { TopBar } from "../Topbar"
 
-export function QuoteScreen({ onBack }: { onBack: () => void }) {
+export function QuoteScreen({ onBack,hideBackButton }: { onBack: () => void,hideBackButton?:boolean }) {
   const [activeFeeling, setActiveFeeling] = useState<string | null>(null)
   const [reacted, setReacted] = useState<string | null>(null)
 
@@ -39,7 +39,7 @@ export function QuoteScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <TopBar title="Positive Vibes ✨" onBack={onBack} />
+      <TopBar title="Positive Vibes ✨" onBack={onBack} showBack={!hideBackButton}/>
 
       <div style={{
         flex: 1,

@@ -43,23 +43,23 @@ const iconHtml = (Icon: LucideIcon, size = ICON_SIZE) =>
   renderToStaticMarkup(<Icon size={size} strokeWidth={1.6} />)
 
 const NODES = [
-  { id: "chat",     label: "Vent Out",   angle: 270, url: undefined as string | undefined, icon: iconHtml(MessageCircle) },
+  { id: "chat", label: "Vent Out", angle: 270, url: undefined as string | undefined, icon: iconHtml(MessageCircle) },
   {
-    id: "meditate", label: "Productivity",   angle: 299, url: undefined as string | undefined, icon: iconHtml(Brain),
+    id: "meditate", label: "Productivity", angle: 299, url: undefined as string | undefined, icon: iconHtml(Brain),
     subNodes: [
-      { id: "breathe",  label: "Breathe",      angle: 279, icon: iconHtml(Wind,  SUB_ICON_SIZE) },
-      { id: "sounds",   label: "Meditate",       angle: 307, icon: iconHtml(Music, SUB_ICON_SIZE) },
+      { id: "breathe", label: "Breathe", angle: 279, icon: iconHtml(Wind, SUB_ICON_SIZE) },
+      { id: "sounds", label: "Meditate", angle: 307, icon: iconHtml(Music, SUB_ICON_SIZE) },
       { id: "pomodoro", label: "Stay Focused", angle: 335, icon: iconHtml(Timer, SUB_ICON_SIZE) },
     ],
   },
-  { id: "quote",     label: "Lift Me Up", angle: 328, url: undefined as string | undefined, icon: iconHtml(Smile) },
-  { id: "therapist", label: "Seek Help",  angle: 357, url: "https://catalystcare.in/therapists", icon: iconHtml(UserRound) },
+  { id: "quote", label: "Lift Me Up", angle: 328, url: undefined as string | undefined, icon: iconHtml(Smile) },
+  { id: "therapist", label: "Seek Help", angle: 357, url: "https://catalystcare.in/therapists", icon: iconHtml(UserRound) },
 ]
 
 // ─── Event bus ───────────────────────────────────────────────────────────────
-const CC_OPEN       = "cc:open-screen"
-const CC_CLOSE      = "cc:close-screen"
-const CC_OPEN_MENU  = "cc:open-menu"
+const CC_OPEN = "cc:open-screen"
+const CC_CLOSE = "cc:close-screen"
+const CC_OPEN_MENU = "cc:open-menu"
 const CC_AUTO_QUOTE = "cc:auto-quote"
 const dispatch = (name: string, detail?: unknown) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
@@ -84,19 +84,19 @@ function fmt(s: number) {
 //  PERSISTENT FAB-LEVEL POMO TOAST
 // ══════════════════════════════════════════════════════════════════════════════
 const FAB_BOTTOM = 28
-const FAB_LEFT   = 28
-const FAB_SIZE   = 54
+const FAB_LEFT = 28
+const FAB_SIZE = 54
 
 function PomoToastBubble() {
-  const [toast,        setToast]   = useState<{ message: string; sub?: string; countdown?: number } | null>(null)
-  const [visible,      setVisible] = useState(false)
-  const [countdown,    setCountdown] = useState<number | null>(null)
-  const hideTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const countdownRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [toast, setToast] = useState<{ message: string; sub?: string; countdown?: number } | null>(null)
+  const [visible, setVisible] = useState(false)
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const dismiss = useCallback(() => {
-    if (hideTimerRef.current)  clearTimeout(hideTimerRef.current)
-    if (countdownRef.current)  clearInterval(countdownRef.current)
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    if (countdownRef.current) clearInterval(countdownRef.current)
     setVisible(false)
     setCountdown(null)
     setTimeout(() => setToast(null), 380)
@@ -106,8 +106,8 @@ function PomoToastBubble() {
     const handler = (e: Event) => {
       const { message, sub, countdown: cd } = (e as CustomEvent<{ message: string; sub?: string; countdown?: number }>).detail
 
-      if (hideTimerRef.current)  clearTimeout(hideTimerRef.current)
-      if (countdownRef.current)  clearInterval(countdownRef.current)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      if (countdownRef.current) clearInterval(countdownRef.current)
 
       setToast({ message, sub, countdown: cd })
       setCountdown(cd ?? null)
@@ -146,14 +146,14 @@ function PomoToastBubble() {
   return (
     <div
       style={{
-        position:   "fixed",
-        bottom:     FAB_BOTTOM + FAB_SIZE + 14,
-        left:       FAB_LEFT,
-        width:      252,
-        zIndex:     2147483648,
+        position: "fixed",
+        bottom: FAB_BOTTOM + FAB_SIZE + 14,
+        left: FAB_LEFT,
+        width: 252,
+        zIndex: 2147483648,
         pointerEvents: "auto",
-        transform:  visible ? "translateY(0) scale(1)" : "translateY(16px) scale(.93)",
-        opacity:    visible ? 1 : 0,
+        transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(.93)",
+        opacity: visible ? 1 : 0,
         transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease",
       }}
     >
@@ -167,13 +167,13 @@ function PomoToastBubble() {
       </div>
 
       <div style={{
-        borderRadius:         16,
-        background:           "linear-gradient(135deg, #0c3e6f 0%, #0a5080 100%)",
-        backdropFilter:       "blur(20px) saturate(1.4)",
+        borderRadius: 16,
+        background: "linear-gradient(135deg, #0c3e6f 0%, #0a5080 100%)",
+        backdropFilter: "blur(20px) saturate(1.4)",
         WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-        boxShadow:            "0 12px 40px rgba(8,28,58,.32), 0 0 0 1px rgba(22,183,194,.22)",
-        padding:              "12px 14px 11px",
-        position:             "relative",
+        boxShadow: "0 12px 40px rgba(8,28,58,.32), 0 0 0 1px rgba(22,183,194,.22)",
+        padding: "12px 14px 11px",
+        position: "relative",
       }}>
         <button
           onClick={dismiss}
@@ -254,9 +254,9 @@ function initWidget(iconSrc: string) {
 
   pomoTimer.subscribe(({ timeLeft, running, mode }) => {
     const timerLabel = document.getElementById("cc-fab-timer-label")
-    const timerMode  = document.getElementById("cc-fab-timer-mode")
+    const timerMode = document.getElementById("cc-fab-timer-mode")
     if (timerLabel) timerLabel.textContent = fmt(timeLeft)
-    if (timerMode)  timerMode.textContent  =
+    if (timerMode) timerMode.textContent =
       mode === "focus" ? "Focus" : mode === "short" ? "Short Break" : "Long Break"
     if (running) {
       fab.classList.add("cc-pomo-active")
@@ -278,13 +278,13 @@ function initWidget(iconSrc: string) {
     subOpen = true
     mediateBtn.classList.add("cc-meditate-active")
     mediateBtn.classList.remove("cc-float")
-    const mr  = mediateBtn.getBoundingClientRect()
+    const mr = mediateBtn.getBoundingClientRect()
     const mcx = mr.left + mr.width / 2, mcy = mr.top + mr.height / 2
 
     nodeData.subNodes!.forEach((sn, i) => {
       const rad = (sn.angle * Math.PI) / 180
-      const sx  = mcx + Math.cos(rad) * SUB_RADIUS - SUB_OFFSET
-      const sy  = mcy + Math.sin(rad) * SUB_RADIUS - SUB_OFFSET
+      const sx = mcx + Math.cos(rad) * SUB_RADIUS - SUB_OFFSET
+      const sy = mcy + Math.sin(rad) * SUB_RADIUS - SUB_OFFSET
 
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement
       svg.setAttribute("class", "cc-sub-connector")
@@ -365,7 +365,7 @@ function initWidget(iconSrc: string) {
       btn.className = "cc-node"
       Object.assign(btn.style, {
         left: `${cx + Math.cos(rad) * RADIUS - OFFSET}px`,
-        top:  `${cy + Math.sin(rad) * RADIUS - OFFSET}px`,
+        top: `${cy + Math.sin(rad) * RADIUS - OFFSET}px`,
       })
       btn.style.setProperty("--f-dur", `${3.1 + i * 0.28}s`)
       btn.style.setProperty("--f-off", `${400 + i * 70}ms`)
@@ -391,7 +391,7 @@ function initWidget(iconSrc: string) {
       btn.addEventListener("click", e => {
         e.stopPropagation(); closeMenu()
         if (node.id === "therapist" && node.url) {
-          ;(chrome as any).tabs?.create({ url: node.url }) ?? window.open(node.url, "_blank")
+          ; (chrome as any).tabs?.create({ url: node.url }) ?? window.open(node.url, "_blank")
           return
         }
         openScreen(node.id)
@@ -581,14 +581,14 @@ function injectGlobalStyles() {
 // ══════════════════════════════════════════════════════════════════════════════
 //  DRAGGABLE DIALOG SHELL
 // ══════════════════════════════════════════════════════════════════════════════
-const DIALOG_W   = 360
-const DIALOG_H   = 520
+const DIALOG_W = 360
+const DIALOG_H = 520
 
 function DraggableShell({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
-  const [visible,  setVisible]  = useState(false)
+  const [visible, setVisible] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
-  const dragging   = useRef(false)
+  const dragging = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
@@ -741,7 +741,7 @@ function AuthScreen({ onSuccess }: { onSuccess: () => void; onClose: () => void 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Widget() {
   const [activeScreen, setActiveScreen] = useState<string | null>(null)
-  const [overlayRoot,  setOverlayRoot]  = useState<HTMLElement | null>(null)
+  const [overlayRoot, setOverlayRoot] = useState<HTMLElement | null>(null)
   const [autoQuote, setAutoQuote] = useState<{ text: string; author: string; feeling: { symbol: string; label: string } } | null>(null)
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
   const activeScreenRef = useRef<string | null>(null)
@@ -765,26 +765,51 @@ export default function Widget() {
     return () => window.removeEventListener(CC_AUTO_QUOTE, onAutoQuote)
   }, [])
 
+  let authWindowOpen = false
   useEffect(() => {
+
     const onFabClick = () => {
       if (!isHydrated) return
-      if (!isAuthenticated) setActiveScreen("auth")
-      else window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
+      if (!isAuthenticated) {
+        if (authWindowOpen) return
+        authWindowOpen = true
+        const authUrl = chrome.runtime.getURL("tabs/auth.html")
+        const win = window.open(authUrl, "_blank", "width=450,height=700")
+
+        return
+      }
+      window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
     }
-    const onOpen  = (e: Event) => {
+
+
+
+    const onOpen = (e: Event) => {
       const screen = (e as CustomEvent<{ screen: string }>).detail?.screen
       if (screen) setActiveScreen(screen)
     }
     const onClose = () => setActiveScreen(null)
     window.addEventListener("cc:fab-clicked", onFabClick)
-    window.addEventListener(CC_OPEN,  onOpen)
+    window.addEventListener(CC_OPEN, onOpen)
     window.addEventListener(CC_CLOSE, onClose)
     return () => {
       window.removeEventListener("cc:fab-clicked", onFabClick)
-      window.removeEventListener(CC_OPEN,  onOpen)
+      window.removeEventListener(CC_OPEN, onOpen)
       window.removeEventListener(CC_CLOSE, onClose)
     }
   }, [isAuthenticated, isHydrated])
+
+useEffect(() => {
+  const storageListener = (changes, area) => {
+    if (area === "local" && changes.cc_auth_success) {
+      authWindowOpen = false
+      hydrate()
+      setActiveScreen(null)
+      setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+    }
+  }
+  chrome.storage.onChanged.addListener(storageListener)
+  return () => chrome.storage.onChanged.removeListener(storageListener)
+}, [hydrate])
 
   // ✅ FIX: Sirf authenticated hone par hi menu kholo
   const closeScreen = () => {
@@ -806,7 +831,7 @@ export default function Widget() {
       case "auth":
         return <AuthScreen onSuccess={handleAuthSuccess} onClose={closeScreen} />
       case "chat":
-        return <ChatScreen onBack={closeScreen} />
+        return <ChatScreen onBack={closeScreen} hideBackButton />
       case "breathe":
         return <BreatheScreen onBack={closeScreen} />
       case "sounds":
