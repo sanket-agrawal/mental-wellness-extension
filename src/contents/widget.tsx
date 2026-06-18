@@ -7,7 +7,6 @@ import {
   Wind, Music, type LucideIcon
 } from "lucide-react"
 import icon from "data-base64:~assets/icon.png"
-import AuthForm from "~src/components/auth/AuthForm"
 import { useAuthStore } from "~src/lib/hooks/useAuthStore"
 import { ChatScreen } from "~src/components/features/Ai/ChatScreen"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -63,6 +62,10 @@ const CC_OPEN_MENU = "cc:open-menu"
 const CC_AUTO_QUOTE = "cc:auto-quote"
 const dispatch = (name: string, detail?: unknown) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
+
+// ─── Auth window tracking (module-level — persists across re-renders) ───────
+let authWindow: Window | null = null
+let authCheckInterval: ReturnType<typeof setInterval> | null = null
 
 // ─── Auto-quote scheduler ────────────────────────────────────────────────────
 const AUTO_QUOTE_INTERVAL_MS = 30 * 1000
@@ -717,26 +720,6 @@ function AutoQuoteBubble({
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  AUTH SCREEN
-// ══════════════════════════════════════════════════════════════════════════════
-class ErrorBoundary extends React.Component<{ fallback: React.ReactNode; children: React.ReactNode }, { hasError: boolean }> {
-  state = { hasError: false }
-  static getDerivedStateFromError() { return { hasError: true } }
-  componentDidCatch(e: any) { console.error("AuthForm crashed:", e) }
-  render() { return this.state.hasError ? this.props.fallback : this.props.children }
-}
-
-function AuthScreen({ onSuccess }: { onSuccess: () => void; onClose: () => void }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
-      <ErrorBoundary fallback={<div style={{ padding: 20, color: "red", fontSize: 12 }}>Auth failed to load.</div>}>
-        <AuthForm onSuccess={onSuccess} />
-      </ErrorBoundary>
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
 //  ROOT REACT COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Widget() {
@@ -765,23 +748,33 @@ export default function Widget() {
     return () => window.removeEventListener(CC_AUTO_QUOTE, onAutoQuote)
   }, [])
 
-  let authWindowOpen = false
+  // ── FAB click + screen open/close listeners ──
   useEffect(() => {
-
     const onFabClick = () => {
       if (!isHydrated) return
       if (!isAuthenticated) {
-        if (authWindowOpen) return
-        authWindowOpen = true
+        // agar window already khuli hai aur band nahi hui, usi pe focus karo
+        if (authWindow && !authWindow.closed) {
+          authWindow.focus()
+          return
+        }
+
         const authUrl = chrome.runtime.getURL("tabs/auth.html")
-        const win = window.open(authUrl, "_blank", "width=450,height=700")
+        authWindow = window.open(authUrl, "_blank", "width=450,height=700")
+
+        if (authCheckInterval) clearInterval(authCheckInterval)
+        authCheckInterval = setInterval(() => {
+          if (authWindow?.closed) {
+            clearInterval(authCheckInterval!)
+            authCheckInterval = null
+            authWindow = null
+          }
+        }, 500)
 
         return
       }
       window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
     }
-
-
 
     const onOpen = (e: Event) => {
       const screen = (e as CustomEvent<{ screen: string }>).detail?.screen
@@ -795,23 +788,28 @@ export default function Widget() {
       window.removeEventListener("cc:fab-clicked", onFabClick)
       window.removeEventListener(CC_OPEN, onOpen)
       window.removeEventListener(CC_CLOSE, onClose)
+      if (authCheckInterval) clearInterval(authCheckInterval)
     }
   }, [isAuthenticated, isHydrated])
 
-useEffect(() => {
-  const storageListener = (changes, area) => {
-    if (area === "local" && changes.cc_auth_success) {
-      authWindowOpen = false
-      hydrate()
-      setActiveScreen(null)
-      setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+  // ── Auth success listener (auth.html storage signal) ──
+  useEffect(() => {
+    const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+      if (area === "local" && changes.cc_auth_success) {
+        if (authCheckInterval) {
+          clearInterval(authCheckInterval)
+          authCheckInterval = null
+        }
+        authWindow = null
+        hydrate()
+        setActiveScreen(null)
+        setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+      }
     }
-  }
-  chrome.storage.onChanged.addListener(storageListener)
-  return () => chrome.storage.onChanged.removeListener(storageListener)
-}, [hydrate])
+    chrome.storage.onChanged.addListener(storageListener)
+    return () => chrome.storage.onChanged.removeListener(storageListener)
+  }, [hydrate])
 
-  // ✅ FIX: Sirf authenticated hone par hi menu kholo
   const closeScreen = () => {
     setActiveScreen(null)
     if (isAuthenticated) {
@@ -821,15 +819,8 @@ useEffect(() => {
 
   const minimizeScreen = () => setActiveScreen(null)
 
-  const handleAuthSuccess = () => {
-    setActiveScreen(null)
-    setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
-  }
-
   const screenEl = (() => {
     switch (activeScreen) {
-      case "auth":
-        return <AuthScreen onSuccess={handleAuthSuccess} onClose={closeScreen} />
       case "chat":
         return <ChatScreen onBack={closeScreen} hideBackButton />
       case "breathe":
@@ -850,7 +841,6 @@ useEffect(() => {
     }
   })()
 
-  const isAuthScreen = activeScreen === "auth"
   const shellOnClose = activeScreen === "pomodoro" ? minimizeScreen : closeScreen
 
   if (!overlayRoot) return null
@@ -869,7 +859,7 @@ useEffect(() => {
         />
       )}
       {screenEl && (
-        <DraggableShell onClose={shellOnClose} wide={isAuthScreen}>
+        <DraggableShell onClose={shellOnClose}>
           {screenEl}
         </DraggableShell>
       )}
