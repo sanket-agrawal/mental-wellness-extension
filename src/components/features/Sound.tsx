@@ -225,7 +225,7 @@ const DEFAULT_VOL = 0.65
 // ─────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────
-export function SoundsScreen({ onBack }: { onBack: () => void }) {
+export function SoundsScreen({ onBack ,hideBackButton  }: { onBack: () => void ,hideBackButton?:boolean}) {
   const [playing, setPlaying] = useState<PlayingMap>({})
   const [volumes, setVolumes] = useState<VolumeMap>({})
   const [masterVol, setMasterVol] = useState(0.7)
@@ -374,7 +374,7 @@ export function SoundsScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 420 }}>
-      <TopBar title="Meditate" onBack={onBack} />
+      <TopBar title="Meditate" onBack={onBack} showBack={!hideBackButton} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
