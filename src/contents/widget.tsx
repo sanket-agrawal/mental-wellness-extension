@@ -824,18 +824,19 @@ export default function Widget() {
       case "chat":
         return <ChatScreen onBack={closeScreen} hideBackButton />
       case "breathe":
-        return <BreatheScreen onBack={closeScreen} />
+        return <BreatheScreen onBack={closeScreen} hideBackButton />
       case "sounds":
-        return <SoundsScreen onBack={closeScreen} />
+        return <SoundsScreen onBack={closeScreen} hideBackButton />
       case "pomodoro":
         return (
           <PomodoroScreen
             onBack={closeScreen}
             onMinimize={minimizeScreen}
+            hideBackButton
           />
         )
       case "quote":
-        return <QuoteScreen onBack={closeScreen} />
+        return <QuoteScreen onBack={closeScreen} hideBackButton/>
       default:
         return null
     }
