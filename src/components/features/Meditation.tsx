@@ -1,85 +1,163 @@
-import { useEffect, useRef, useState } from "react"
+import { useState, useEffect } from "react"
+import { Wind, ListChecks } from "lucide-react"
 import { TopBar } from "../Topbar"
-import { HoverBtn } from "../HoverBtn"
-export const BREATHE_STEPS = [
-  { label: "Inhale",  duration: 4, instruction: "Breathe in slowly through your nose, filling your lungs completely." },
-  { label: "Hold",    duration: 4, instruction: "Hold gently. Let stillness settle in." },
-  { label: "Exhale",  duration: 6, instruction: "Release slowly through your mouth. Let everything go." },
-]
 
-export function BreatheScreen({ onBack ,hideBackButton }: { onBack: () => void,hideBackButton?:boolean }) {
-  const [active, setActive] = useState(false)
-  const [stepIdx, setStepIdx] = useState(0)
-  const [elapsed, setElapsed] = useState(0)
-  const [round, setRound] = useState(0)
-  const itvRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const step = BREATHE_STEPS[stepIdx]
+type BreathingPhase = "Inhale" | "Hold" | "Exhale" | "Hold"
+
+interface BreatheScreenProps {
+  onBack?: () => void
+  hideBackButton?: boolean
+}
+
+export function BreatheScreen({
+  onBack = () => {},
+  hideBackButton = false
+}: BreatheScreenProps) {
+
+  const [breathing, setBreathing] = useState<BreathingPhase>("Hold")
+  const [breathingPhase, setBreathingPhase] = useState<number>(3)
 
   useEffect(() => {
-    if (!active) return
-    itvRef.current = setInterval(() => {
-      setElapsed(e => {
-        if (e + 1 >= step.duration) {
-          const next = (stepIdx + 1) % BREATHE_STEPS.length
-          if (next === 0) setRound(r => r + 1)
-          setStepIdx(next); return 0
-        }
-        return e + 1
-      })
-    }, 1000)
-    return () => { itvRef.current && clearInterval(itvRef.current) }
-  }, [active, stepIdx, step.duration])
+    const steps: BreathingPhase[] = ["Inhale", "Hold", "Exhale", "Hold"]
+    let i = 0
+    const interval = setInterval(() => {
+      setBreathing(steps[i % steps.length])
+      setBreathingPhase(i % steps.length)
+      i++
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [])
 
-  const toggle = () => {
-    if (active) { itvRef.current && clearInterval(itvRef.current); setActive(false) }
-    else { setStepIdx(0); setElapsed(0); setActive(true) }
-  }
+  const balloonInstructions: string[] = [
+    "Watch the circle — it grows and shrinks on a steady cycle",
+    "Breathe in as it expands (Inhale, 4s)",
+    "Hold gently at its largest size (Hold, 4s)",
+    "Breathe out as it contracts (Exhale, 4s)",
+    "Hold briefly at the smallest size, then repeat (Hold, 4s)"
+  ]
 
-  const progress = step ? elapsed / step.duration : 0
-  const scale = 1 + progress * 0.13
+
+  const circleScale = breathingPhase < 2 ? 1.25 : 0.85
+  const circleColor =
+    breathingPhase === 0
+      ? "#3b82f6"
+      : breathingPhase === 1
+        ? "#8b5cf6"
+        : breathingPhase === 2
+          ? "#06b6d4"
+          : "#10b981"
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 420 }}>
-      <TopBar title="Breathe" onBack={onBack} showBack={!hideBackButton}/>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 32px", gap: 0 }}>
-        {round > 0 && (
-          <div style={{ fontSize: 10, letterSpacing: "2px", textTransform: "uppercase", color: "#6a8fab", marginBottom: 16 }}>
-            Round {round}
+    <div
+      style={{ display: "flex", flexDirection: "column", minHeight: 420 }}
+      className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-hidden"
+    >
+      <style>{`
+        @keyframes blob-pulse-1 {
+          0%, 100% { transform: scale(1) rotate(0deg); }
+          50% { transform: scale(1.15) rotate(180deg); }
+        }
+        @keyframes blob-pulse-2 {
+          0%, 100% { transform: scale(1.15) rotate(0deg); }
+          50% { transform: scale(1) rotate(180deg); }
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes ring-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.2); opacity: 0; }
+        }
+        @keyframes caption-pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fade-in-scale {
+          from { opacity: 0; transform: scale(0.8); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .blob-1 { animation: blob-pulse-1 20s ease-in-out infinite; }
+        .blob-2 { animation: blob-pulse-2 25s ease-in-out infinite; }
+        .breathing-ring { animation: spin-slow 16s linear infinite; }
+        .breathing-pulse-ring { animation: ring-pulse 4s ease-in-out infinite; }
+        .breathing-caption { animation: caption-pulse 4s ease-in-out infinite; }
+        .fade-in-up { animation: fade-in-up 0.5s ease-out both; }
+        .fade-in-scale { animation: fade-in-scale 0.4s ease-out both; }
+      `}</style>
+
+      {/* Ambient Background Elements (kept small so they stay contained) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="blob-1 absolute -top-16 -right-16 w-40 h-40 bg-gradient-to-br from-blue-200/30 to-indigo-300/30 rounded-full blur-3xl" />
+        <div className="blob-2 absolute -bottom-16 -left-16 w-48 h-48 bg-gradient-to-tr from-purple-200/30 to-pink-300/30 rounded-full blur-3xl" />
+      </div>
+
+      <TopBar title="Meditation" onBack={onBack} showBack={!hideBackButton} />
+
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-3 text-center">
+        <h2 className="text-base font-bold text-[#0c3e6f] mb-1 flex items-center justify-center gap-2">
+          <Wind className="w-4 h-4" />
+          Breathing Practice
+        </h2>
+        <p className="text-xs text-gray-500 mb-8">4-4-4-4 Box Breathing Technique</p>
+
+        <div className="relative flex items-center justify-center mb-5">
+          {/* Outer Ring */}
+          <div className="breathing-ring absolute w-40 h-40 rounded-full border-4 border-indigo-200" />
+
+          {/* Breathing Circle */}
+          <div
+            style={{
+              transform: `scale(${circleScale})`,
+              backgroundColor: circleColor,
+              transition: "transform 3.5s ease-in-out, background-color 0.5s ease-in-out"
+            }}
+            className="w-28 h-28 rounded-full flex items-center justify-center shadow-xl relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-full" />
+
+            <div key={breathing} className="fade-in-scale text-center z-10">
+              <div className="text-sm font-bold text-white leading-tight">
+                {breathing}
+              </div>
+              <div className="text-white/80 text-[10px]">4 seconds</div>
+            </div>
+
+            <div className="breathing-pulse-ring absolute inset-0 rounded-full border-2 border-white/30" />
           </div>
-        )}
-        <div style={{
-          width: 108, height: 108, borderRadius: "50%",
-          background: active ? "#0c3e6f" : "rgba(12,62,111,.08)",
-          transform: `scale(${active ? scale : 1})`,
-          transition: "transform .6s ease, background .5s ease",
-          boxShadow: active ? `0 0 0 ${Math.round(14 * progress)}px rgba(22,183,194,.12)` : "none",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          marginBottom: 28,
-        }}>
-          <span style={{ fontSize: 10.5, letterSpacing: "1.5px", textTransform: "uppercase", color: active ? "rgba(255,255,255,.85)" : "#6a8fab" }}>
-            {active ? step.label : "Ready"}
-          </span>
         </div>
-        <p style={{ fontSize: 13.5, fontWeight: 300, lineHeight: 1.72, textAlign: "center", maxWidth: 248, color: "#2a5a8a", marginBottom: 12 }}>
-          {active ? step.instruction : "Find a quiet moment. Let your shoulders drop. You're about to give yourself a gift."}
+
+        <p className="breathing-caption text-gray-500 text-xs italic mt-5 mb-5">
+          Follow the rhythm • Breathe with intention
         </p>
-        {active && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-            {BREATHE_STEPS.map((_, i) => (
-              <div key={i} style={{ height: 4, borderRadius: 2, transition: "all .3s", width: i === stepIdx ? 18 : 5, background: i === stepIdx ? "#16B7C2" : "rgba(12,62,111,.12)" }} />
+
+        {/* Balloon Instructions */}
+        <div className="fade-in-up w-full max-w-xs bg-white/60 backdrop-blur-md rounded-2xl p-4 shadow-md border border-white/30 text-left">
+          <h3 className="text-xs font-bold text-gray-800 mb-2.5 flex items-center gap-1.5">
+            <ListChecks className="w-3.5 h-3.5 text-[#0c3e6f]" />
+            How to Use the Breathing Balloon
+          </h3>
+          <div className="space-y-1.5">
+            {balloonInstructions.map((instruction: string, j: number) => (
+              <div
+                key={j}
+                className="fade-in-up flex items-start gap-2"
+                style={{ animationDelay: `${j * 0.08}s` }}
+              >
+                <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#0c3e6f] text-white text-[9px] font-semibold flex-shrink-0 mt-0.5">
+                  {j + 1}
+                </div>
+                <span className="text-gray-600 text-[11px] leading-snug">
+                  {instruction}
+                </span>
+              </div>
             ))}
           </div>
-        )}
-        <HoverBtn onClick={toggle} style={{ padding: "10px 28px", borderRadius: 99, fontSize: 13, fontWeight: 500 }}
-          base={{ background: active ? "transparent" : "#0c3e6f", border: active ? "1.5px solid rgba(12,62,111,.2)" : "none", color: active ? "#0c3e6f" : "#fff" }}
-        >
-          {active ? "Pause" : "Begin"}
-        </HoverBtn>
-        {!active && (
-          <p style={{ fontSize: 11, fontWeight: 300, textAlign: "center", marginTop: 14, maxWidth: 200, lineHeight: 1.6, color: "#8aadcc" }}>
-            4-4-6 breathing · Calms your nervous system
-          </p>
-        )}
+        </div>
       </div>
     </div>
   )
