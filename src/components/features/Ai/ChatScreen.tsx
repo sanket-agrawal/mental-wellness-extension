@@ -1,9 +1,28 @@
 import { useState, useRef, useEffect, useCallback } from "react"
+import { sendToBackground } from "@plasmohq/messaging"
 
 import cc from "../../../assets/logo.svg"
 import { TopBar } from "~components/Topbar"
 import { useIsAuthenticated } from "~lib/hooks/Useisauthenticated"
 import { useAuthStore } from "~lib/hooks/useAuthStore"
+
+// ─── Background-proxied fetch (bypasses CORS in content scripts) ──────────────
+async function apiFetch(
+  url: string,
+  options: { method?: string; headers?: Record<string, string>; body?: unknown } = {}
+): Promise<{ ok: boolean; status: number; data: any }> {
+  const result = await sendToBackground({
+    name: "apiProxy" as never,
+    body: {
+      url,
+      method: options.method || "GET",
+      headers: options.headers || {},
+      body: options.body,
+    },
+  }) as { ok: boolean; status: number; data: any; error?: string }
+  if (result.error) throw new Error(result.error)
+  return result
+}
 
 const QUICK_PROMPTS = ["I'm overwhelmed", "Can't stop thinking", "I feel alone", "I'm anxious"]
 const VENT_API_URL = `${process.env.PLASMO_PUBLIC_API_URL}/api/v1/ai/vent/text/message`
@@ -658,15 +677,13 @@ const ChatScreenInner = ({ onBack, authToken, hideBackButton }: { onBack: () => 
     if (sessionId.current) return Promise.resolve(sessionId.current)
     if (sessionPromise.current) return sessionPromise.current
 
-    sessionPromise.current = fetch(SESSION_API_URL, {
+    sessionPromise.current = apiFetch(SESSION_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
     })
       .then(res => {
         if (!res.ok) throw new Error(`Session create failed: ${res.status}`)
-        return res.json()
-      })
-      .then(json => {
+        const json = res.data
         const id = json.data?.sessionId as string
         if (!id) throw new Error("No sessionId in response")
         sessionId.current = id
@@ -685,11 +702,11 @@ const ChatScreenInner = ({ onBack, authToken, hideBackButton }: { onBack: () => 
   const fetchSessions = async () => {
     setSessionsLoading(true)
     try {
-      const res = await fetch(SESSION_API_URL, {
+      const res = await apiFetch(SESSION_API_URL, {
         headers: { Authorization: `Bearer ${authToken}` },
       })
       if (!res.ok) throw new Error("Failed to fetch sessions")
-      const json = await res.json()
+      const json = res.data
       setSessions(json.data || [])
     } catch (err) {
       console.error("Fetch sessions error:", err)
@@ -701,7 +718,7 @@ const ChatScreenInner = ({ onBack, authToken, hideBackButton }: { onBack: () => 
   // ─── Delete session ────────────────────────────────────────────────────────
   const handleDeleteSession = async (sid: string) => {
     try {
-      const res = await fetch(`${SESSION_API_URL}/${sid}`, {
+      const res = await apiFetch(`${SESSION_API_URL}/${sid}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${authToken}` },
       })
@@ -727,11 +744,11 @@ const ChatScreenInner = ({ onBack, authToken, hideBackButton }: { onBack: () => 
 
   // ─── Fetch session messages ────────────────────────────────────────────────
   const fetchSessionMessages = async (sid: string): Promise<Message[]> => {
-    const res = await fetch(`${SESSION_API_URL}/${sid}`, {
+    const res = await apiFetch(`${SESSION_API_URL}/${sid}`, {
       headers: { Authorization: `Bearer ${authToken}` },
     })
     if (!res.ok) throw new Error("Failed to fetch session messages")
-    const json = await res.json()
+    const json = res.data
     const raw: Array<{ role: string; content: string; id?: string }> = json.data || []
     return raw.map((m, i) => ({
       id: m.id || `${sid}-${i}`,
@@ -790,13 +807,13 @@ const ChatScreenInner = ({ onBack, authToken, hideBackButton }: { onBack: () => 
     platformUrl: string
   }> => {
     const sid = await createSession()
-    const response = await fetch(VENT_API_URL, {
+    const response = await apiFetch(VENT_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-      body: JSON.stringify({ message, sessionId: sid }),
+      body: { message, sessionId: sid },
     })
     if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
-    const json = await response.json()
+    const json = response.data
     if (!json.success || !json.data?.reply) throw new Error("Invalid response from server")
     return {
       reply: json.data.reply as string,
