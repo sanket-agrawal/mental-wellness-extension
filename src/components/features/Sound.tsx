@@ -41,11 +41,17 @@ const CATEGORY_SOUNDS: {
 }[] = [
     {
       category: "Focus", categoryIcon: FiZap, type: "noise",
-      freqs: [400, 600, 500, 450, 550, 480, 520, 470, 530, 490],
-      names: ["Deep Focus", "Study Flow", "Coding Session", "Productivity Boost", "Creative Mind", "Laser Focus", "Work Zone", "Concentration Flow", "Focus Pulse", "Mind Clarity"],
-      benefits: ["Sharpens concentration", "Sustains deep work", "Eases coding flow", "Boosts productivity", "Sparks creative ideas", "Razor-sharp attention", "Clears mental clutter", "Steady work rhythm", "Rhythmic focus boost", "Untangles racing thoughts"],
-      icons: [FiTarget, FiTrendingUp, FiCpu, FiZap, FiActivity, FiTarget, FiHome, FiCircle, FiZap, FiFeather],
+      freqs: [400, 600, 500],
+      names: ["Deep Focus", "Study Flow", "Coding Session"],
+      benefits: ["Sharpens concentration", "Sustains deep work", "Eases coding flow"],
+      icons: [FiTarget, FiTrendingUp, FiCpu],
+      // ── Extra Focus sounds commented out — only 3 real audio files available ──
+      // freqs: [450, 550, 480, 520, 470, 530, 490],
+      // names: ["Productivity Boost", "Creative Mind", "Laser Focus", "Work Zone", "Concentration Flow", "Focus Pulse", "Mind Clarity"],
+      // benefits: ["Boosts productivity", "Sparks creative ideas", "Razor-sharp attention", "Clears mental clutter", "Steady work rhythm", "Rhythmic focus boost", "Untangles racing thoughts"],
+      // icons: [FiZap, FiActivity, FiTarget, FiHome, FiCircle, FiZap, FiFeather],
     },
+    /* ── Remaining categories commented out — keeping only 3 sounds total ──
     {
       category: "Relax", categoryIcon: FiFeather, type: "noise",
       freqs: [200, 120, 300, 250, 180, 220, 160, 280, 240, 200],
@@ -95,6 +101,7 @@ const CATEGORY_SOUNDS: {
       benefits: ["Drifting through the cosmos", "An astral voyage", "Vast universe stillness", "Dreaming nebula colors", "Echoes across the galaxy", "Meditation under starlight", "Interstellar calm", "Celestial flow state", "Currents of the stars", "A sanctuary among stars"],
       icons: [FiCircle, FiCompass, FiCircle, FiStar, FiActivity, FiStar, FiFeather, FiTrendingUp, FiWind, FiHome],
     },
+    */
   ]
 
 const CATEGORIES = CATEGORY_SOUNDS.map(c => c.category)
@@ -332,10 +339,18 @@ export function SoundsScreen({ onBack ,hideBackButton  }: { onBack: () => void ,
 
     setPlaying(prev => ({ ...prev, [s.id]: true }))
   }, [getCtx, getMaster, getSoundVol])
-
-  const toggle = useCallback((s: SoundDef) => {
-    playing[s.id] ? stopSound(s.id) : startSound(s)
-  }, [playing, stopSound, startSound])
+  
+const toggle = useCallback((s: SoundDef) => {
+  if (playing[s.id]) {
+    stopSound(s.id)
+    return
+  }
+  // Only one sound at a time — stop any other sound that's currently playing
+  Object.keys(playing).forEach(id => {
+    if (id !== s.id) stopSound(id)
+  })
+  startSound(s)
+}, [playing, stopSound, startSound])
 
   const handleSoundVolume = useCallback((id: string, value: number) => {
     setVolumes(prev => ({ ...prev, [id]: value }))
