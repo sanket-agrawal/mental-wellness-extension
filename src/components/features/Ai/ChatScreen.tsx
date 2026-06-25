@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react"
-import { TopBar } from "~src/components/Topbar"
-import { useAuthStore } from "~src/lib/hooks/useAuthStore"
-import { useIsAuthenticated } from "~src/lib/hooks/Useisauthenticated"
+
 import cc from "../../../assets/logo.svg"
+import { TopBar } from "~components/Topbar"
+import { useIsAuthenticated } from "~lib/hooks/Useisauthenticated"
+import { useAuthStore } from "~lib/hooks/useAuthStore"
 
 const QUICK_PROMPTS = ["I'm overwhelmed", "Can't stop thinking", "I feel alone", "I'm anxious"]
 const VENT_API_URL = `${process.env.PLASMO_PUBLIC_API_URL}/api/v1/ai/vent/text/message`
