@@ -7,15 +7,16 @@ import {
   Wind, Music, type LucideIcon
 } from "lucide-react"
 import icon from "data-base64:~assets/icon.png"
-import { useAuthStore } from "~src/lib/hooks/useAuthStore"
-import { ChatScreen } from "~src/components/features/Ai/ChatScreen"
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { BreatheScreen } from "~src/components/features/Meditation"
-import { SoundsScreen } from "~src/components/features/Sound"
-import { QuoteScreen } from "~src/components/features/Quote"
-import { PomodoroScreen } from "~src/components/features/Pomodoro"
-import { pomoTimer } from "~src/lib/helpers/pomodoroTimer"
-import { QUOTES } from "~src/lib/constants/contant"
+import { pomoTimer } from "~lib/helpers/pomodoroTimer"
+import { useAuthStore } from "~lib/hooks/useAuthStore"
+import { QUOTES } from "~lib/constants/contant"
+import { ChatScreen } from "~components/features/Ai/ChatScreen"
+import { BreatheScreen } from "~components/features/Meditation"
+import { SoundsScreen } from "~components/features/Sound"
+import { PomodoroScreen } from "~components/features/Pomodoro"
+import { QuoteScreen } from "~components/features/Quote"
 
 export const config: PlasmoCSConfig = { matches: ["<all_urls>"] }
 
@@ -68,7 +69,7 @@ let authWindow: Window | null = null
 let authCheckInterval: ReturnType<typeof setInterval> | null = null
 
 // ─── Auto-quote scheduler ────────────────────────────────────────────────────
-const AUTO_QUOTE_INTERVAL_MS = 30 * 1000
+const AUTO_QUOTE_INTERVAL_MS = 5 * 30 * 1000
 let _autoQuoteItv: ReturnType<typeof setInterval> | null = null
 
 function startAutoQuoteScheduler() {
