@@ -194,7 +194,8 @@ async function fetchAudioBuffer(url: string, ctx: AudioContext): Promise<AudioBu
 // Audio types
 // ─────────────────────────────────────────────────────────────────────────
 interface AudioHandle {
-  src: AudioBufferSourceNode | OscillatorNode | null
+  src: AudioBufferSourceNode | OscillatorNode | MediaElementAudioSourceNode | null
+  audioEl?: HTMLAudioElement
   gain: GainNode
 }
 
@@ -267,14 +268,31 @@ export function SoundsScreen({ onBack ,hideBackButton  }: { onBack: () => void ,
     if (!handle) return
     const ctx = ctxRef.current
     if (!ctx) return
-    const { gain, src } = handle
+    const { gain, src, audioEl } = handle
     const now = ctx.currentTime
     gain.gain.cancelScheduledValues(now)
     gain.gain.setValueAtTime(gain.gain.value, now)
     gain.gain.linearRampToValueAtTime(0, now + FADE_S)
     setTimeout(() => {
-      if (src) { try { src.stop() } catch { /* already stopped */ }; src.disconnect() }
-      gain.disconnect()
+      if (audioEl) {
+        try {
+          audioEl.pause()
+          audioEl.src = ""
+        } catch {}
+      }
+      if (src) {
+        try {
+          if (typeof (src as any).stop === "function") {
+            (src as any).stop()
+          }
+        } catch { /* already stopped */ }
+        try {
+          src.disconnect()
+        } catch {}
+      }
+      try {
+        gain.disconnect()
+      } catch {}
       nodesRef.current.delete(id)
     }, (FADE_S + 0.1) * 1000)
     setPlaying(prev => { const next = { ...prev }; delete next[id]; return next })
@@ -298,7 +316,6 @@ export function SoundsScreen({ onBack ,hideBackButton  }: { onBack: () => void ,
 
     const useFallback = (err?: unknown) => {
       console.warn("[CC Sound] CDN failed, fallback. Reason:", err)
-      console.log("nodesRef has id?", nodesRef.current.has(s.id))
       if (!nodesRef.current.has(s.id)) return
       let src: AudioBufferSourceNode | OscillatorNode
       if (s.type === "noise") {
@@ -321,21 +338,63 @@ export function SoundsScreen({ onBack ,hideBackButton  }: { onBack: () => void ,
         src = osc
       }
       const existing = nodesRef.current.get(s.id)
-      if (existing) existing.src = src
+      if (existing) {
+        existing.src = src
+        existing.audioEl = undefined
+      }
     }
 
-    fetchAudioBuffer(s.audioUrl, ctx)
-      .then(decoded => {
-        if (!nodesRef.current.has(s.id)) return
-        const bufSrc = ctx.createBufferSource()
-        bufSrc.buffer = decoded
-        bufSrc.loop = true
-        bufSrc.connect(gain)
-        bufSrc.start()
-        const existing = nodesRef.current.get(s.id)
-        if (existing) existing.src = bufSrc
-      })
-      .catch(useFallback)
+    const loadViaBufferFetch = () => {
+      fetchAudioBuffer(s.audioUrl, ctx)
+        .then(decoded => {
+          if (!nodesRef.current.has(s.id)) return
+          const bufSrc = ctx.createBufferSource()
+          bufSrc.buffer = decoded
+          bufSrc.loop = true
+          bufSrc.connect(gain)
+          bufSrc.start()
+          const existing = nodesRef.current.get(s.id)
+          if (existing) {
+            existing.src = bufSrc
+            existing.audioEl = undefined
+          }
+        })
+        .catch(useFallback)
+    }
+
+    // Try HTML5 Audio Streaming first for instant playback
+    const audio = new Audio(s.audioUrl)
+    audio.crossOrigin = "anonymous"
+    audio.loop = true
+
+    const mediaSrc = ctx.createMediaElementSource(audio)
+    mediaSrc.connect(gain)
+
+    const handleAudioError = (err?: any) => {
+      if (!nodesRef.current.has(s.id)) return
+      const currentHandle = nodesRef.current.get(s.id)
+      if (currentHandle && currentHandle.audioEl === audio) {
+        console.warn("[CC Sound] HTML5 Audio streaming failed, trying buffer fetch. Error:", err)
+        try {
+          audio.pause()
+          audio.src = ""
+        } catch {}
+        try {
+          mediaSrc.disconnect()
+        } catch {}
+        loadViaBufferFetch()
+      }
+    }
+
+    audio.addEventListener("error", handleAudioError)
+
+    const existing = nodesRef.current.get(s.id)
+    if (existing) {
+      existing.src = mediaSrc
+      existing.audioEl = audio
+    }
+
+    audio.play().catch(handleAudioError)
 
     setPlaying(prev => ({ ...prev, [s.id]: true }))
   }, [getCtx, getMaster, getSoundVol])

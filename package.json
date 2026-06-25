@@ -42,7 +42,9 @@
       "identity"
     ],
     "host_permissions": [
-      "https://*/*"
+      "https://devapi.catalystcare.in/*",
+      "https://api.catalystcare.in/*",
+      "https://pub-101043d36027421984bbff70d1e303e4.r2.dev/*"
     ],
     "oauth2": {
       "client_id": "$PLASMO_PUBLIC_GOOGLE_CLIENT_ID",
@@ -53,8 +55,12 @@
     },
     "web_accessible_resources": [
       {
-        "resources": ["tabs/auth.html"],
-        "matches": ["<all_urls>"]
+        "resources": [
+          "tabs/auth.html"
+        ],
+        "matches": [
+          "<all_urls>"
+        ]
       }
     ]
   }
