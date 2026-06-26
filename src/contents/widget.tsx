@@ -754,7 +754,6 @@ export default function Widget() {
     const onFabClick = () => {
       if (!isHydrated) return
       if (!isAuthenticated) {
-        // agar window already khuli hai aur band nahi hui, usi pe focus karo
         if (authWindow && !authWindow.closed) {
           authWindow.focus()
           return
