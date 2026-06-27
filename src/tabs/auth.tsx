@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import "~style.css"
 
 import AuthForm from "../components/auth/AuthForm"
+import AuthFormWidget from "~components/auth/AuthFormWidget"
 
 const queryClient = new QueryClient()
 
@@ -13,9 +14,18 @@ function AuthApp() {
   }
 
   return (
-    <div style={{ width: 420, minHeight: 600, display: "flex", flexDirection: "column", background: "#fff" }}>
-      <AuthForm onSuccess={handleAuthSuccess} />
-    </div>
+  <div
+  style={{
+    width: "100vw",
+    height: "100vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    background: "#fff",
+  }}
+>
+  <AuthFormWidget onSuccess={handleAuthSuccess}  />
+</div>
   )
 }
 
