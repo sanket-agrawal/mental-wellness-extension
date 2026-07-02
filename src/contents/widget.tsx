@@ -64,10 +64,6 @@ const CC_AUTO_QUOTE = "cc:auto-quote"
 const dispatch = (name: string, detail?: unknown) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
 
-// ─── Auth window tracking (module-level — persists across re-renders) ───────
-let authWindow: Window | null = null
-let authCheckInterval: ReturnType<typeof setInterval> | null = null
-
 // ─── Auto-quote scheduler ────────────────────────────────────────────────────
 const AUTO_QUOTE_INTERVAL_MS = 5 * 30 * 1000
 let _autoQuoteItv: ReturnType<typeof setInterval> | null = null
@@ -753,26 +749,13 @@ export default function Widget() {
   useEffect(() => {
     const onFabClick = () => {
       if (!isHydrated) return
+
+      // ← CHANGED: open auth inline instead of a new tab
       if (!isAuthenticated) {
-        if (authWindow && !authWindow.closed) {
-          authWindow.focus()
-          return
-        }
-
-        const authUrl = chrome.runtime.getURL("tabs/auth.html")
-        authWindow = window.open(authUrl, "_blank", "width=450,height=700")
-
-        if (authCheckInterval) clearInterval(authCheckInterval)
-        authCheckInterval = setInterval(() => {
-          if (authWindow?.closed) {
-            clearInterval(authCheckInterval!)
-            authCheckInterval = null
-            authWindow = null
-          }
-        }, 500)
-
+        setActiveScreen("auth")
         return
       }
+
       window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
     }
 
@@ -788,7 +771,6 @@ export default function Widget() {
       window.removeEventListener("cc:fab-clicked", onFabClick)
       window.removeEventListener(CC_OPEN, onOpen)
       window.removeEventListener(CC_CLOSE, onClose)
-      if (authCheckInterval) clearInterval(authCheckInterval)
     }
   }, [isAuthenticated, isHydrated])
 
@@ -796,11 +778,6 @@ export default function Widget() {
   useEffect(() => {
     const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
       if (area === "local" && changes.cc_auth_success) {
-        if (authCheckInterval) {
-          clearInterval(authCheckInterval)
-          authCheckInterval = null
-        }
-        authWindow = null
         hydrate()
         setActiveScreen(null)
         setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
@@ -821,6 +798,19 @@ export default function Widget() {
 
   const screenEl = (() => {
     switch (activeScreen) {
+      case "auth":
+        return (
+          <iframe
+            src={chrome.runtime.getURL("tabs/auth.html")}
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+              borderRadius: 20,
+              display: "block",
+            }}
+          />
+        )
       case "chat":
         return <ChatScreen onBack={closeScreen} hideBackButton />
       case "breathe":
@@ -836,13 +826,17 @@ export default function Widget() {
           />
         )
       case "quote":
-        return <QuoteScreen onBack={closeScreen} hideBackButton/>
+        return <QuoteScreen onBack={closeScreen} hideBackButton />
       default:
         return null
     }
   })()
 
-  const shellOnClose = activeScreen === "pomodoro" ? minimizeScreen : closeScreen
+  // ← CHANGED: auth close just dismisses (no menu re-open since user isn't logged in yet)
+  const shellOnClose =
+    activeScreen === "pomodoro" ? minimizeScreen :
+    activeScreen === "auth"     ? () => setActiveScreen(null) :
+    closeScreen
 
   if (!overlayRoot) return null
 

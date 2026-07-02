@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { Storage } from "@plasmohq/storage"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { GoogleOAuthProvider } from "@react-oauth/google"
+
 
 import "~style.css"
 
@@ -316,12 +316,9 @@ function App() {
 
 export default function Popup() {
   return (
-    <GoogleOAuthProvider
-      clientId={process.env.PLASMO_PUBLIC_GOOGLE_CLIENT_ID!}
-    >
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>
-    </GoogleOAuthProvider>
+
   )
 }

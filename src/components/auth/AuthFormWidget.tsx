@@ -30,6 +30,9 @@ interface Toast {
     type: "success" | "error"
 }
 
+// ── Panel height shared across all auth states ─────────────────
+const PANEL_MIN_HEIGHT = "560px"
+
 // ── Mini toast system ──────────────────────────────────────────
 let toastId = 0
 function useToast() {
@@ -619,6 +622,7 @@ export default function AuthFormWidget({ onSuccess }: AuthFormProps) {
     // ── Render ──
     return (
         <div
+            className="cc-auth-scroll"
             style={{
                 position: "fixed",
                 top: 0,
@@ -633,8 +637,17 @@ export default function AuthFormWidget({ onSuccess }: AuthFormProps) {
                 boxSizing: "border-box"
             }}
         >
-            {/* Spinner keyframes injected once */}
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            {/* Spinner keyframes + hidden scrollbar (kept scrollable, just visually clean) */}
+            <style>{`
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                .cc-auth-scroll {
+                    scrollbar-width: none; /* Firefox */
+                    -ms-overflow-style: none; /* IE/Edge */
+                }
+                .cc-auth-scroll::-webkit-scrollbar {
+                    display: none; /* Chrome/Safari/Edge */
+                }
+            `}</style>
 
             {/* Brand header */}
             <div
@@ -687,6 +700,7 @@ export default function AuthFormWidget({ onSuccess }: AuthFormProps) {
             </div>
 
             <div
+                className="cc-auth-scroll"
                 style={{
                     flex: 1,
                     display: "flex",
@@ -699,7 +713,7 @@ export default function AuthFormWidget({ onSuccess }: AuthFormProps) {
 
                 {/* ── FORGOT PASSWORD FLOW ── */}
                 {mode === "forgot-password" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <div style={{ minHeight: PANEL_MIN_HEIGHT, display: "flex", flexDirection: "column", gap: "16px" }}>
                         {fpStep === "email" && (
                             <form onSubmit={handleFpSendOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                                 <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -843,68 +857,70 @@ export default function AuthFormWidget({ onSuccess }: AuthFormProps) {
 
                 {/* ── SIGNUP OTP VERIFY ── */}
                 {mode !== "forgot-password" && signupStep === "verify-otp" && (
-                    <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
-                            <div
-                                style={{
-                                    width: "48px",
-                                    height: "48px",
-                                    borderRadius: "16px",
-                                    backgroundColor: "#ecfeff",
-                                    margin: "0 auto",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
-                                }}
-                            >
-                                <Mail size={22} style={{ color: "#16B7C2" }} />
+                    <div style={{ minHeight: PANEL_MIN_HEIGHT, display: "flex", flexDirection: "column" }}>
+                        <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                <div
+                                    style={{
+                                        width: "48px",
+                                        height: "48px",
+                                        borderRadius: "16px",
+                                        backgroundColor: "#ecfeff",
+                                        margin: "0 auto",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
+                                    }}
+                                >
+                                    <Mail size={22} style={{ color: "#16B7C2" }} />
+                                </div>
+                                <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Verify Email</h2>
+                                <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                                    Code sent to <span style={{ fontWeight: 600, color: "#334155" }}>{email}</span>
+                                </p>
                             </div>
-                            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>Verify Email</h2>
-                            <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
-                                Code sent to <span style={{ fontWeight: 600, color: "#334155" }}>{email}</span>
-                            </p>
-                        </div>
-                        <OtpInput value={otp} onChange={setOtp} />
-                        <Btn disabled={otp.length !== 6} loading={loading}>Verify Email</Btn>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                            <button
-                                type="button"
-                                onClick={handleResend}
-                                disabled={loading}
-                                style={{
-                                    background: "none",
-                                    border: "none",
-                                    cursor: loading ? "not-allowed" : "pointer",
-                                    fontSize: "12px",
-                                    color: "#16B7C2",
-                                    textDecoration: "underline"
-                                }}
-                            >
-                                Resend OTP
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => { setSignupStep("form"); setOtp("") }}
-                                style={{
-                                    background: "none",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    fontSize: "12px",
-                                    color: "#64748b",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "4px"
-                                }}
-                            >
-                                <ArrowLeft size={12} /> Go back
-                            </button>
-                        </div>
-                    </form>
+                            <OtpInput value={otp} onChange={setOtp} />
+                            <Btn disabled={otp.length !== 6} loading={loading}>Verify Email</Btn>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                                <button
+                                    type="button"
+                                    onClick={handleResend}
+                                    disabled={loading}
+                                    style={{
+                                        background: "none",
+                                        border: "none",
+                                        cursor: loading ? "not-allowed" : "pointer",
+                                        fontSize: "12px",
+                                        color: "#16B7C2",
+                                        textDecoration: "underline"
+                                    }}
+                                >
+                                    Resend OTP
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSignupStep("form"); setOtp("") }}
+                                    style={{
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "12px",
+                                        color: "#64748b",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "4px"
+                                    }}
+                                >
+                                    <ArrowLeft size={12} /> Go back
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 )}
 
                 {/* ── LOGIN / SIGNUP FORM ── */}
                 {mode !== "forgot-password" && signupStep === "form" && (
-                    <>
+                    <div style={{ minHeight: PANEL_MIN_HEIGHT, display: "flex", flexDirection: "column" }}>
                         {/* Tab switcher */}
                         <div
                             style={{
@@ -1107,7 +1123,7 @@ export default function AuthFormWidget({ onSuccess }: AuthFormProps) {
                                 {mode === "login" ? "Sign In" : "Create Account"}
                             </Btn>
                         </form>
-                    </>
+                    </div>
                 )}
                 </div>
             </div>
