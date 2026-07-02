@@ -1,8 +1,8 @@
 {
-  "name": "catalystcare-chrome-extension",
-  "displayName": "Catalystcare chrome extension",
+  "name": "cove-by-catalystcare",
+  "displayName": "Cove by CatalystCare",
   "version": "0.0.1",
-  "description": "Vent out box and mental wellness tool",
+  "description": "Wellness Companion",
   "author": "Sanket Agrawal <mailsanketagrawal@gmail.com>",
   "scripts": {
     "dev": "plasmo dev",
