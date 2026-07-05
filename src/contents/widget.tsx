@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import type { PlasmoCSConfig } from "plasmo"
 import {
   MessageCircle, Brain, Timer, Smile, UserRound,
-  Wind, Music, type LucideIcon
+  Wind, Music, EyeOff, type LucideIcon
 } from "lucide-react"
 import icon from "data-base64:~assets/icon.png"
 
@@ -45,15 +45,15 @@ const iconHtml = (Icon: LucideIcon, size = ICON_SIZE) =>
 const NODES = [
   { id: "chat", label: "Vent Out", angle: 270, url: undefined as string | undefined, icon: iconHtml(MessageCircle) },
   {
-    id: "meditate", label: "Productivity", angle: 299, url: undefined as string | undefined, icon: iconHtml(Brain),
+    id: "meditate", label: "Productivity", angle: 300, url: undefined as string | undefined, icon: iconHtml(Brain),
     subNodes: [
-      { id: "breathe", label: "Breathe", angle: 279, icon: iconHtml(Wind, SUB_ICON_SIZE) },
-      { id: "sounds", label: "Meditate", angle: 307, icon: iconHtml(Music, SUB_ICON_SIZE) },
-      { id: "pomodoro", label: "Stay Focused", angle: 335, icon: iconHtml(Timer, SUB_ICON_SIZE) },
+      { id: "breathe", label: "Breathe", angle: 272, icon: iconHtml(Wind, SUB_ICON_SIZE) },
+      { id: "sounds", label: "Meditate", angle: 300, icon: iconHtml(Music, SUB_ICON_SIZE) },
+      { id: "pomodoro", label: "Stay Focused", angle: 328, icon: iconHtml(Timer, SUB_ICON_SIZE) },
     ],
   },
-  { id: "quote", label: "Lift Me Up", angle: 328, url: undefined as string | undefined, icon: iconHtml(Smile) },
-  { id: "therapist", label: "Seek Help", angle: 357, url: "https://catalystcare.in/therapists", icon: iconHtml(UserRound) },
+  { id: "quote", label: "Lift Me Up", angle: 330, url: undefined as string | undefined, icon: iconHtml(Smile) },
+  { id: "therapist", label: "Seek Help", angle: 360, url: "https://catalystcare.in/therapists", icon: iconHtml(UserRound) },
 ]
 
 // ─── Event bus ───────────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ function initWidget(iconSrc: string) {
   const fab = document.createElement("button")
   fab.id = "cc-fab"
   fab.innerHTML = `
-    <img id="cc-fab-img" src="${iconSrc}" alt="logo" />
+    <img id="cc-fab-img" src="${iconSrc}" alt="logo" draggable="false" />
     <div id="cc-fab-timer">
       <span id="cc-fab-timer-label">25:00</span>
       <span id="cc-fab-timer-mode">Focus</span>
@@ -270,6 +270,72 @@ function initWidget(iconSrc: string) {
   let subHoverTimer: ReturnType<typeof setTimeout> | null = null
   let subCloseTimer: ReturnType<typeof setTimeout> | null = null
   let subOpen = false, meditateBtnRef: HTMLButtonElement | null = null
+  let currentAngleOffset = 0
+
+  let hoverNode: HTMLButtonElement | null = null
+  let hoverNodeCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+  const closeHoverNode = () => {
+    if (hoverNode) {
+      hoverNode.classList.remove("cc-vis", "cc-float")
+      const nodeToRemove = hoverNode
+      hoverNode = null
+      setTimeout(() => nodeToRemove.remove(), 250)
+    }
+  }
+
+  fab.addEventListener("mouseenter", () => {
+    if (fab.classList.contains("cc-hidden-tab") || fab.classList.contains("cc-pomo-active") || isOpen || isDragging || hasMoved) return
+    if (hoverNodeCloseTimer) { clearTimeout(hoverNodeCloseTimer); hoverNodeCloseTimer = null }
+    
+    if (!hoverNode) {
+      const fr = fab.getBoundingClientRect()
+      const cx = fr.left + fr.width / 2
+      const cy = fr.top + fr.height / 2
+      const isTop = cy < window.innerHeight / 2
+      const rad = ((isTop ? 90 : 270) * Math.PI) / 180
+      
+      hoverNode = document.createElement("button") as HTMLButtonElement
+      hoverNode.className = "cc-node"
+      Object.assign(hoverNode.style, {
+        left: `${cx + Math.cos(rad) * RADIUS - OFFSET}px`,
+        top: `${cy + Math.sin(rad) * RADIUS - OFFSET}px`,
+        transition: "transform .3s cubic-bezier(.34,1.56,.64,1), opacity .2s ease",
+        transform: "scale(0.3)",
+        zIndex: "2147483648"
+      })
+      
+      hoverNode.innerHTML = `<span class="cc-ni">${iconHtml(EyeOff)}</span><span class="cc-nl">Hide Widget</span>`
+      
+      hoverNode.addEventListener("mouseenter", () => {
+        if (hoverNodeCloseTimer) { clearTimeout(hoverNodeCloseTimer); hoverNodeCloseTimer = null }
+      })
+      hoverNode.addEventListener("mouseleave", () => {
+        hoverNodeCloseTimer = setTimeout(closeHoverNode, 200)
+      })
+      hoverNode.addEventListener("click", e => {
+        e.stopPropagation()
+        closeHoverNode()
+        hideFab()
+      })
+      
+      document.body.appendChild(hoverNode)
+      
+      requestAnimationFrame(() => {
+        if (hoverNode) {
+          hoverNode.classList.add("cc-vis")
+          hoverNode.style.transform = "scale(1)"
+          setTimeout(() => hoverNode?.classList.add("cc-float"), 300)
+        }
+      })
+    }
+  })
+
+  fab.addEventListener("mouseleave", () => {
+    if (hoverNode) {
+      hoverNodeCloseTimer = setTimeout(closeHoverNode, 200)
+    }
+  })
 
   const openScreen = (screen: string) => dispatch(CC_OPEN, { screen })
 
@@ -282,7 +348,7 @@ function initWidget(iconSrc: string) {
     const mcx = mr.left + mr.width / 2, mcy = mr.top + mr.height / 2
 
     nodeData.subNodes!.forEach((sn, i) => {
-      const rad = (sn.angle * Math.PI) / 180
+      const rad = ((sn.angle + currentAngleOffset) * Math.PI) / 180
       const sx = mcx + Math.cos(rad) * SUB_RADIUS - SUB_OFFSET
       const sy = mcy + Math.sin(rad) * SUB_RADIUS - SUB_OFFSET
 
@@ -347,6 +413,24 @@ function initWidget(iconSrc: string) {
 
   const openMenu = () => {
     isOpen = true; fab.classList.add("cc-open")
+
+    const fr = fab.getBoundingClientRect()
+    const cx = fr.left + fr.width / 2, cy = fr.top + fr.height / 2
+
+    const isLeft = cx < window.innerWidth / 2;
+    const isTop = cy < window.innerHeight / 2;
+    if (isLeft && !isTop) currentAngleOffset = 0;       // Bottom-Left (Base: Top-Right)
+    else if (!isLeft && !isTop) currentAngleOffset = -90; // Bottom-Right (Base -> Top-Left)
+    else if (!isLeft && isTop) currentAngleOffset = -180; // Top-Right (Base -> Bottom-Left)
+    else if (isLeft && isTop) currentAngleOffset = 90;    // Top-Left (Base -> Bottom-Right)
+
+    r1.style.setProperty('left', (cx - 155) + 'px', 'important');
+    r1.style.setProperty('top', (cy - 155) + 'px', 'important');
+    r1.style.setProperty('bottom', 'auto', 'important');
+    r2.style.setProperty('left', (cx - 180) + 'px', 'important');
+    r2.style.setProperty('top', (cy - 180) + 'px', 'important');
+    r2.style.setProperty('bottom', 'auto', 'important');
+
     r1.classList.add("cc-vis"); r2.classList.add("cc-vis")
     bd = document.createElement("div"); bd.id = "cc-bd"
     bd.addEventListener("click", (e) => {
@@ -355,12 +439,10 @@ function initWidget(iconSrc: string) {
     })
     document.body.appendChild(bd)
 
-    const fr = fab.getBoundingClientRect()
-    const cx = fr.left + fr.width / 2, cy = fr.top + fr.height / 2
     nodes = []
 
     NODES.forEach((node, i) => {
-      const rad = (node.angle * Math.PI) / 180
+      const rad = ((node.angle + currentAngleOffset) * Math.PI) / 180
       const btn = document.createElement("button") as HTMLButtonElement
       btn.className = "cc-node"
       Object.assign(btn.style, {
@@ -390,6 +472,10 @@ function initWidget(iconSrc: string) {
 
       btn.addEventListener("click", e => {
         e.stopPropagation(); closeMenu()
+        if (node.id === "hide") {
+          hideFab();
+          return;
+        }
         if (node.id === "therapist" && node.url) {
           ; (chrome as any).tabs?.create({ url: node.url }) ?? window.open(node.url, "_blank")
           return
@@ -421,14 +507,161 @@ function initWidget(iconSrc: string) {
     }
   }
 
+  const setFabPos = (x: number, y: number) => {
+    fab.style.setProperty('left', x + 'px', 'important');
+    fab.style.setProperty('top', y + 'px', 'important');
+    fab.style.setProperty('bottom', 'auto', 'important');
+    fab.style.setProperty('right', 'auto', 'important');
+    fab.style.setProperty('--fab-top', y + 'px');
+  }
+
+  chrome.storage.local.get(['cc_fab_pos', 'cc_fab_hidden', 'cc_fab_side'], (res) => {
+    if (res.cc_fab_hidden) {
+      fab.classList.add("cc-hidden-tab");
+      const isLeft = res.cc_fab_side === 'left';
+      fab.classList.add(isLeft ? "cc-hidden-left" : "cc-hidden-right");
+      if (res.cc_fab_pos) {
+        fab.style.setProperty('top', res.cc_fab_pos.y + 'px', 'important');
+        fab.style.setProperty('--fab-top', res.cc_fab_pos.y + 'px');
+        if (isLeft) {
+          fab.style.setProperty('left', '0px', 'important');
+          fab.style.setProperty('right', 'auto', 'important');
+        } else {
+          fab.style.setProperty('left', 'auto', 'important');
+          fab.style.setProperty('right', '0px', 'important');
+        }
+      }
+    } else {
+      if (res.cc_fab_pos) setFabPos(res.cc_fab_pos.x, res.cc_fab_pos.y);
+    }
+  });
+
+  const hideFab = () => {
+    if (fab.classList.contains("cc-pomo-active")) return;
+    const rect = fab.getBoundingClientRect();
+    fab.style.setProperty('--fab-top', rect.top + 'px');
+    const isLeft = (rect.left + rect.width / 2) < window.innerWidth / 2;
+    fab.classList.add("cc-hidden-tab");
+    fab.classList.add(isLeft ? "cc-hidden-left" : "cc-hidden-right");
+    if (isLeft) {
+      fab.style.setProperty('left', '0px', 'important');
+      fab.style.setProperty('right', 'auto', 'important');
+    } else {
+      fab.style.setProperty('left', 'auto', 'important');
+      fab.style.setProperty('right', '0px', 'important');
+    }
+    chrome.storage.local.set({ cc_fab_hidden: true, cc_fab_side: isLeft ? 'left' : 'right' });
+  };
+
+  const unhideFab = () => {
+    fab.classList.remove("cc-hidden-tab", "cc-hidden-left", "cc-hidden-right");
+    chrome.storage.local.set({ cc_fab_hidden: false });
+    const rect = fab.getBoundingClientRect();
+    let newLeft = rect.left;
+    if (newLeft > window.innerWidth - 54) newLeft = window.innerWidth - 54;
+    setFabPos(newLeft, rect.top);
+  };
+
+  let isDragging = false, hasMoved = false, dragStartX = 0, dragStartY = 0;
+  let startLeft = 0, startTop = 0;
+
+  fab.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+
+    isDragging = true;
+    hasMoved = false;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    const rect = fab.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    fab.style.setProperty('transition', 'none', 'important');
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      hasMoved = true;
+      if (hoverNode) closeHoverNode();
+      if (isOpen) { closeSubNodes(); closeMenu(); }
+    }
+    if (hasMoved) {
+      let newLeft = startLeft + dx;
+      let newTop = startTop + dy;
+      
+      const isHidden = fab.classList.contains("cc-hidden-tab");
+      const fabW = isHidden ? 24 : 54;
+      const fabH = isHidden ? 48 : 54;
+      
+      newTop = Math.max(0, Math.min(newTop, window.innerHeight - fabH));
+      
+      if (isHidden) {
+        const isLeft = (newLeft + fabW / 2) < window.innerWidth / 2;
+        if (isLeft) {
+          fab.classList.add("cc-hidden-left");
+          fab.classList.remove("cc-hidden-right");
+          fab.style.setProperty('left', '0px', 'important');
+          fab.style.setProperty('right', 'auto', 'important');
+        } else {
+          fab.classList.add("cc-hidden-right");
+          fab.classList.remove("cc-hidden-left");
+          fab.style.setProperty('left', 'auto', 'important');
+          fab.style.setProperty('right', '0px', 'important');
+        }
+      } else {
+        newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - fabW));
+        fab.style.setProperty('left', newLeft + 'px', 'important');
+        fab.style.setProperty('right', 'auto', 'important');
+      }
+
+      fab.style.setProperty('top', newTop + 'px', 'important');
+      fab.style.setProperty('bottom', 'auto', 'important');
+      fab.style.setProperty('--fab-top', newTop + 'px');
+    }
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    fab.style.removeProperty('transition');
+    if (hasMoved) {
+      const rect = fab.getBoundingClientRect();
+      let saveX = rect.left;
+      if (saveX > window.innerWidth - 54) saveX = window.innerWidth - 54;
+      
+      const isHidden = fab.classList.contains("cc-hidden-tab");
+      const side = fab.classList.contains("cc-hidden-left") ? 'left' : 'right';
+      
+      chrome.storage.local.set({ 
+        cc_fab_pos: { x: saveX, y: rect.top },
+        ...(isHidden ? { cc_fab_side: side } : {})
+      });
+      setTimeout(() => { hasMoved = false; }, 50);
+    }
+  });
+
+  fab.addEventListener("contextmenu", (e) => {
+    if (fab.classList.contains("cc-hidden-tab")) return;
+    e.preventDefault();
+    hideFab();
+  });
+
   window.addEventListener(CC_OPEN_MENU, openMenu)
 
   fab.addEventListener("click", (e) => {
     e.stopPropagation()
+    if (hasMoved) return; // Prevent click if we just dragged
+    if (fab.classList.contains("cc-hidden-tab")) {
+      unhideFab();
+      return;
+    }
     if (fab.classList.contains("cc-pomo-active")) {
       dispatch(CC_OPEN, { screen: "pomodoro" }); return
     }
     if (isOpen) { closeSubNodes(); closeMenu(); return }
+    closeHoverNode();
     dispatch("cc:fab-clicked")
   })
 
@@ -501,6 +734,7 @@ function injectGlobalStyles() {
     #cc-fab-img {
       width: 38px !important; height: 38px !important;
       object-fit: cover !important; border-radius: 50% !important;
+      -webkit-user-drag: none !important; user-select: none !important; pointer-events: none !important;
     }
     #cc-fab-timer {
       display: none !important; flex-direction: column !important;
@@ -528,6 +762,26 @@ function injectGlobalStyles() {
     .cc-ring.cc-vis { opacity: 1 !important; }
     #cc-r1 { width: 310px !important; height: 310px !important; bottom: -100px !important; left: -100px !important; border: 1px dashed rgba(12,62,111,.15) !important; }
     #cc-r2 { width: 360px !important; height: 360px !important; bottom: -125px !important; left: -125px !important; border: 1px solid rgba(12,62,111,.08) !important; }
+    
+    #cc-fab.cc-hidden-tab {
+      width: 24px !important; height: 48px !important;
+      background: #16B7C2 !important;
+      animation: none !important;
+      opacity: 0.6 !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+      transform: none !important;
+      top: var(--fab-top, auto) !important;
+      border-radius: 0 8px 8px 0 !important;
+    }
+    #cc-fab.cc-hidden-tab:hover { opacity: 1 !important; width: 32px !important; }
+    #cc-fab.cc-hidden-tab * { display: none !important; }
+    #cc-fab.cc-hidden-tab::after { content: "▶" !important; color: white !important; font-size: 10px !important; }
+    
+    #cc-fab.cc-hidden-left { left: 0 !important; right: auto !important; bottom: auto !important; border-radius: 0 8px 8px 0 !important; }
+    #cc-fab.cc-hidden-left::after { content: "▶" !important; }
+    
+    #cc-fab.cc-hidden-right { right: 0 !important; left: auto !important; bottom: auto !important; border-radius: 8px 0 0 8px !important; }
+    #cc-fab.cc-hidden-right::after { content: "◀" !important; }
     .cc-node {
       all: initial; position: fixed !important;
       width: ${NODE_SIZE}px !important; height: ${NODE_SIZE}px !important;
@@ -594,11 +848,21 @@ function DraggableShell({ onClose, children, wide }: { onClose: () => void; chil
   useEffect(() => {
     const w = expanded ? DIALOG_W + 80 : (wide ? 400 : DIALOG_W)
     const h = DIALOG_H
-    const x = FAB_LEFT + FAB_SIZE + 12
-    const y = window.innerHeight - FAB_BOTTOM - FAB_SIZE - h + FAB_SIZE / 2
+    
+    const fabEl = document.getElementById("cc-fab")
+    let startX = FAB_LEFT + FAB_SIZE + 12
+    let startY = window.innerHeight - FAB_BOTTOM - FAB_SIZE - h + FAB_SIZE / 2
+
+    if (fabEl) {
+      const rect = fabEl.getBoundingClientRect()
+      const isLeft = (rect.left + rect.width / 2) < window.innerWidth / 2
+      startX = isLeft ? rect.left + rect.width + 12 : rect.left - w - 12
+      startY = Math.max(12, rect.bottom - h + 20)
+    }
+
     setPos({
-      x: Math.min(x, window.innerWidth - w - 12),
-      y: Math.max(12, Math.min(y, window.innerHeight - h - 12)),
+      x: Math.max(12, Math.min(startX, window.innerWidth - w - 12)),
+      y: Math.max(12, Math.min(startY, window.innerHeight - h - 12)),
     })
     requestAnimationFrame(() => setVisible(true))
   }, [])
