@@ -66,7 +66,7 @@ const dispatch = (name: string, detail?: unknown) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
 
 // ─── Auto-quote scheduler ────────────────────────────────────────────────────
-const AUTO_QUOTE_INTERVAL_MS = 5 * 60 * 1000
+const AUTO_QUOTE_INTERVAL_MS = 5 * 30 * 1000
 let _autoQuoteItv: ReturnType<typeof setInterval> | null = null
 
 function startAutoQuoteScheduler() {
