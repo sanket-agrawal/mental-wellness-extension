@@ -17,6 +17,7 @@ import { ChatScreen } from "./components/features/Ai/ChatScreen"
 import { QuoteScreen } from "./components/features/Quote"
 import { BreatheScreen } from "./components/features/Meditation"
 import { SoundsScreen } from "./components/features/Sound"
+import { PrivacyConsentDialog } from "./components/features/PrivacyConsent"
 
 const storage = new Storage({ area: "session" })
 
@@ -38,6 +39,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>("menu")
   const [quoteIdx, setQuoteIdx] = useState(0)
   const [visible, setVisible] = useState(false)
+  const [showPrivacyConsent, setShowPrivacyConsent] = useState(false)
 
   useEffect(() => {
     hydrate()
@@ -56,6 +58,12 @@ function App() {
 
         await storage.remove("cc_initial_screen")
       }
+
+      chrome.storage.local.get(["cc_privacy_accepted"], (res) => {
+        if (!res.cc_privacy_accepted) {
+          setShowPrivacyConsent(true)
+        }
+      })
 
       setTimeout(() => setVisible(true), 60)
     }
@@ -245,7 +253,11 @@ function App() {
       <div className="absolute -top-24 -left-16 w-64 h-64 rounded-full bg-blue-200/40 blur-3xl" />
       <div className="absolute bottom-0 right-0 w-56 h-56 rounded-full bg-sky-100/40 blur-3xl" />
 
-      {[
+      {showPrivacyConsent && (
+        <PrivacyConsentDialog onAccept={() => setShowPrivacyConsent(false)} />
+      )}
+
+      {!showPrivacyConsent && [
         {
           s: "menu" as Screen,
           node: (

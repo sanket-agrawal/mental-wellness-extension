@@ -17,6 +17,7 @@ import { BreatheScreen } from "~components/features/Meditation"
 import { SoundsScreen } from "~components/features/Sound"
 import { PomodoroScreen } from "~components/features/Pomodoro"
 import { QuoteScreen } from "~components/features/Quote"
+import { PrivacyConsentDialog } from "~components/features/PrivacyConsent"
 
 export const config: PlasmoCSConfig = { matches: ["<all_urls>"] }
 
@@ -65,7 +66,7 @@ const dispatch = (name: string, detail?: unknown) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
 
 // ─── Auto-quote scheduler ────────────────────────────────────────────────────
-const AUTO_QUOTE_INTERVAL_MS = 5 * 30 * 1000
+const AUTO_QUOTE_INTERVAL_MS = 5 * 60 * 1000
 let _autoQuoteItv: ReturnType<typeof setInterval> | null = null
 
 function startAutoQuoteScheduler() {
@@ -87,10 +88,42 @@ const FAB_BOTTOM = 28
 const FAB_LEFT = 28
 const FAB_SIZE = 54
 
+function getFabBubblePos(bubbleW: number, bubbleH: number): { left?: number; right?: number; top?: number; bottom?: number; caret: "bottom-left" | "bottom-right" | "top-left" | "top-right" } {
+  const fabEl = document.getElementById("cc-fab")
+  if (!fabEl) {
+    return { left: FAB_LEFT, bottom: FAB_BOTTOM + FAB_SIZE + 14, caret: "bottom-left" }
+  }
+  const rect = fabEl.getBoundingClientRect()
+  const fabCX = rect.left + rect.width / 2
+  const fabCY = rect.top + rect.height / 2
+  const isLeft = fabCX < window.innerWidth / 2
+  const isTop = fabCY < window.innerHeight / 2
+  const gap = 12
+
+  if (!isTop) {
+    // FAB in bottom half — bubble goes above
+    const top = Math.max(8, rect.top - bubbleH - gap)
+    if (isLeft) {
+      return { left: Math.max(8, rect.left), top, caret: "bottom-left" }
+    } else {
+      return { left: Math.max(8, rect.right - bubbleW), top, caret: "bottom-right" }
+    }
+  } else {
+    // FAB in top half — bubble goes below
+    const top = Math.min(window.innerHeight - bubbleH - 8, rect.bottom + gap)
+    if (isLeft) {
+      return { left: Math.max(8, rect.left), top, caret: "top-left" }
+    } else {
+      return { left: Math.max(8, rect.right - bubbleW), top, caret: "top-right" }
+    }
+  }
+}
+
 function PomoToastBubble() {
   const [toast, setToast] = useState<{ message: string; sub?: string; countdown?: number } | null>(null)
   const [visible, setVisible] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [bubblePos, setBubblePos] = useState<ReturnType<typeof getFabBubblePos> | null>(null)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -109,6 +142,7 @@ function PomoToastBubble() {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
 
+      setBubblePos(getFabBubblePos(252, 90))
       setToast({ message, sub, countdown: cd })
       setCountdown(cd ?? null)
       requestAnimationFrame(() => setVisible(true))
@@ -141,14 +175,28 @@ function PomoToastBubble() {
     }
   }, [])
 
-  if (!toast) return null
+  // Re-anchor bubble when FAB is dragged
+  useEffect(() => {
+    const onFabMoved = () => {
+      if (toast) setBubblePos(getFabBubblePos(252, 90))
+    }
+    window.addEventListener("cc:fab-moved", onFabMoved)
+    return () => window.removeEventListener("cc:fab-moved", onFabMoved)
+  }, [toast])
+
+  if (!toast || !bubblePos) return null
+
+  const isCaretBottom = bubblePos.caret === "bottom-left" || bubblePos.caret === "bottom-right"
+  const isCaretLeft = bubblePos.caret === "bottom-left" || bubblePos.caret === "top-left"
 
   return (
     <div
       style={{
         position: "fixed",
-        bottom: FAB_BOTTOM + FAB_SIZE + 14,
-        left: FAB_LEFT,
+        top: bubblePos.top,
+        left: bubblePos.left,
+        right: bubblePos.right,
+        bottom: bubblePos.bottom,
         width: 252,
         zIndex: 2147483648,
         pointerEvents: "auto",
@@ -157,14 +205,16 @@ function PomoToastBubble() {
         transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease",
       }}
     >
-      <div style={{ position: "absolute", bottom: -7, left: 20, width: 14, height: 8, overflow: "hidden" }}>
-        <div style={{
-          width: 14, height: 14,
-          background: "#0c3e6f",
-          transform: "rotate(45deg) translateY(-7px)",
-          boxShadow: "2px 2px 6px rgba(8,28,58,.18)",
-        }} />
-      </div>
+      {isCaretBottom && (
+        <div style={{ position: "absolute", bottom: -7, left: isCaretLeft ? 20 : undefined, right: isCaretLeft ? undefined : 20, width: 14, height: 8, overflow: "hidden" }}>
+          <div style={{ width: 14, height: 14, background: "#0c3e6f", transform: "rotate(45deg) translateY(-7px)", boxShadow: "2px 2px 6px rgba(8,28,58,.18)" }} />
+        </div>
+      )}
+      {!isCaretBottom && (
+        <div style={{ position: "absolute", top: -7, left: isCaretLeft ? 20 : undefined, right: isCaretLeft ? undefined : 20, width: 14, height: 8, overflow: "hidden", transform: "rotate(180deg)" }}>
+          <div style={{ width: 14, height: 14, background: "#0c3e6f", transform: "rotate(45deg) translateY(-7px)", boxShadow: "2px 2px 6px rgba(8,28,58,.18)" }} />
+        </div>
+      )}
 
       <div style={{
         borderRadius: 16,
@@ -619,6 +669,7 @@ function initWidget(iconSrc: string) {
       fab.style.setProperty('top', newTop + 'px', 'important');
       fab.style.setProperty('bottom', 'auto', 'important');
       fab.style.setProperty('--fab-top', newTop + 'px');
+      window.dispatchEvent(new CustomEvent("cc:fab-moved"));
     }
   });
 
@@ -833,8 +884,7 @@ function injectGlobalStyles() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  DRAGGABLE DIALOG SHELL
-// ══════════════════════════════════════════════════════════════════════════════
+
 const DIALOG_W = 360
 const DIALOG_H = 520
 
@@ -951,6 +1001,9 @@ function AutoQuoteBubble({
 }) {
   const [visible, setVisible] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bubbleW = 240
+  const bubbleH = 110
+  const [bpos, setBpos] = useState(() => getFabBubblePos(bubbleW, bubbleH))
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
@@ -958,16 +1011,33 @@ function AutoQuoteBubble({
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [])
 
+  // Re-anchor when FAB is dragged
+  useEffect(() => {
+    const onFabMoved = () => setBpos(getFabBubblePos(bubbleW, bubbleH))
+    window.addEventListener("cc:fab-moved", onFabMoved)
+    return () => window.removeEventListener("cc:fab-moved", onFabMoved)
+  }, [])
+
   const dismiss = () => {
     if (timerRef.current) clearTimeout(timerRef.current)
     setVisible(false); setTimeout(onDismiss, 400)
   }
 
+  const isCaretBottom = bpos.caret === "bottom-left" || bpos.caret === "bottom-right"
+  const isCaretLeft = bpos.caret === "bottom-left" || bpos.caret === "top-left"
+
   return (
-    <div style={{ position: "fixed", bottom: FAB_BOTTOM + FAB_SIZE + 14, left: FAB_LEFT, width: 240, zIndex: 2147483646, pointerEvents: "auto", transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(.94)", opacity: visible ? 1 : 0, transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease" }}>
-      <div style={{ position: "absolute", bottom: -7, left: 20, width: 14, height: 8, overflow: "hidden" }}>
-        <div style={{ width: 14, height: 14, background: "rgba(239,246,255,0.96)", border: "1px solid rgba(12,62,111,.1)", transform: "rotate(45deg) translateY(-7px)", boxShadow: "2px 2px 6px rgba(8,28,58,.1)" }} />
-      </div>
+    <div style={{ position: "fixed", top: bpos.top, left: bpos.left, right: bpos.right, bottom: bpos.bottom, width: bubbleW, zIndex: 2147483646, pointerEvents: "auto", transform: visible ? "translateY(0) scale(1)" : "translateY(16px) scale(.94)", opacity: visible ? 1 : 0, transition: "transform .38s cubic-bezier(.34,1.56,.64,1), opacity .28s ease" }}>
+      {isCaretBottom && (
+        <div style={{ position: "absolute", bottom: -7, left: isCaretLeft ? 20 : undefined, right: isCaretLeft ? undefined : 20, width: 14, height: 8, overflow: "hidden" }}>
+          <div style={{ width: 14, height: 14, background: "rgba(239,246,255,0.96)", border: "1px solid rgba(12,62,111,.1)", transform: "rotate(45deg) translateY(-7px)", boxShadow: "2px 2px 6px rgba(8,28,58,.1)" }} />
+        </div>
+      )}
+      {!isCaretBottom && (
+        <div style={{ position: "absolute", top: -7, left: isCaretLeft ? 20 : undefined, right: isCaretLeft ? undefined : 20, width: 14, height: 8, overflow: "hidden", transform: "rotate(180deg)" }}>
+          <div style={{ width: 14, height: 14, background: "rgba(239,246,255,0.96)", border: "1px solid rgba(12,62,111,.1)", transform: "rotate(45deg) translateY(-7px)", boxShadow: "2px 2px 6px rgba(8,28,58,.1)" }} />
+        </div>
+      )}
       <div style={{ borderRadius: 16, background: "rgba(239,246,255,0.96)", backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)", boxShadow: "0 12px 40px rgba(8,28,58,.22), 0 0 0 1px rgba(12,62,111,.1)", padding: "14px 16px 12px", position: "relative" }}>
         <button onClick={dismiss} style={{ position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", fontSize: 13, color: "#8aadcc", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1 }}>×</button>
         <p style={{ margin: "0 20px 6px 0", fontSize: 12.5, fontWeight: 300, lineHeight: 1.6, color: "#0c3e6f", fontStyle: "italic" }}>"{text}"</p>
@@ -987,6 +1057,7 @@ export default function Widget() {
   const [activeScreen, setActiveScreen] = useState<string | null>(null)
   const [overlayRoot, setOverlayRoot] = useState<HTMLElement | null>(null)
   const [autoQuote, setAutoQuote] = useState<{ text: string; author: string; feeling: { symbol: string; label: string } } | null>(null)
+  const [showPrivacyConsent, setShowPrivacyConsent] = useState(false)
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
   const activeScreenRef = useRef<string | null>(null)
   useEffect(() => { activeScreenRef.current = activeScreen }, [activeScreen])
@@ -1044,7 +1115,15 @@ export default function Widget() {
       if (area === "local" && changes.cc_auth_success) {
         hydrate()
         setActiveScreen(null)
-        setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+        // Check if user has already accepted the privacy policy
+        chrome.storage.local.get(["cc_privacy_accepted"], (res) => {
+          if (res.cc_privacy_accepted) {
+            setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+          } else {
+            // Show privacy consent dialog first
+            setShowPrivacyConsent(true)
+          }
+        })
       }
     }
     chrome.storage.onChanged.addListener(storageListener)
@@ -1108,7 +1187,16 @@ export default function Widget() {
     <QueryClientProvider client={queryClient}>
       <PomoToastBubble />
 
-      {autoQuote && !activeScreen && (
+      {showPrivacyConsent && (
+        <PrivacyConsentDialog
+          onAccept={() => {
+            setShowPrivacyConsent(false)
+            setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+          }}
+        />
+      )}
+
+      {!showPrivacyConsent && autoQuote && !activeScreen && (
         <AutoQuoteBubble
           text={autoQuote.text}
           author={autoQuote.author}
@@ -1117,7 +1205,7 @@ export default function Widget() {
           onOpen={() => { setAutoQuote(null); setActiveScreen("quote") }}
         />
       )}
-      {screenEl && (
+      {!showPrivacyConsent && screenEl && (
         <DraggableShell onClose={shellOnClose}>
           {screenEl}
         </DraggableShell>
