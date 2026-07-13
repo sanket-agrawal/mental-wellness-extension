@@ -888,7 +888,7 @@ function injectGlobalStyles() {
 const DIALOG_W = 360
 const DIALOG_H = 520
 
-function DraggableShell({ onClose, children, wide }: { onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+function DraggableShell({ onClose, children, wide, privacyAccepted }: { onClose: () => void; children: React.ReactNode; wide?: boolean; privacyAccepted?: boolean }) {
   const [visible, setVisible] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -965,12 +965,15 @@ function DraggableShell({ onClose, children, wide }: { onClose: () => void; chil
         }}>
         <div onMouseDown={onMouseDown} style={{ position: "absolute", top: 0, left: 52, right: 72, height: 52, cursor: "grab", zIndex: 10 }} />
         <div style={{ position: "absolute", top: 5, right: 14, display: "flex", alignItems: "center", gap: 6, zIndex: 20 }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}
-            style={{ width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(12,62,111,.12)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 11, color: "#6a8fab", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .18s", outline: "none" }}
-            onMouseEnter={e => { e.currentTarget.style.background = "#16B7C2"; e.currentTarget.style.color = "#fff" }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.7)"; e.currentTarget.style.color = "#6a8fab" }}
-          >{expanded ? "⇤" : "⇥"}</button>
+          {/* Expand button — only available after privacy accepted */}
+          {privacyAccepted && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}
+              style={{ width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(12,62,111,.12)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 11, color: "#6a8fab", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .18s", outline: "none" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#16B7C2"; e.currentTarget.style.color = "#fff" }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.7)"; e.currentTarget.style.color = "#6a8fab" }}
+            >{expanded ? "⇤" : "⇥"}</button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onClose() }}
             style={{ width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(12,62,111,.12)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 13, color: "#6a8fab", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .18s", outline: "none" }}
@@ -1058,6 +1061,7 @@ export default function Widget() {
   const [overlayRoot, setOverlayRoot] = useState<HTMLElement | null>(null)
   const [autoQuote, setAutoQuote] = useState<{ text: string; author: string; feeling: { symbol: string; label: string } } | null>(null)
   const [showPrivacyConsent, setShowPrivacyConsent] = useState(false)
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
   const activeScreenRef = useRef<string | null>(null)
   useEffect(() => { activeScreenRef.current = activeScreen }, [activeScreen])
@@ -1068,6 +1072,13 @@ export default function Widget() {
     if (el) setOverlayRoot(el)
   }, [])
   useEffect(() => { initWidget(icon) }, [])
+
+  // Load privacy status on mount
+  useEffect(() => {
+    chrome.storage.local.get(["cc_privacy_accepted"], (res) => {
+      if (res.cc_privacy_accepted) setPrivacyAccepted(true)
+    })
+  }, [])
 
   useEffect(() => {
     const onAutoQuote = () => {
@@ -1085,16 +1096,25 @@ export default function Widget() {
     const onFabClick = () => {
       if (!isHydrated) return
 
-      // ← CHANGED: open auth inline instead of a new tab
+      // Step 1: Privacy consent must be shown first — before auth or menu
+      if (!privacyAccepted) {
+        setShowPrivacyConsent(true)
+        return
+      }
+
+      // Step 2: Privacy accepted — now check auth
       if (!isAuthenticated) {
         setActiveScreen("auth")
         return
       }
 
+      // Step 3: All good — open menu
       window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
     }
 
     const onOpen = (e: Event) => {
+      // Block screen opens until privacy is accepted
+      if (!privacyAccepted) return
       const screen = (e as CustomEvent<{ screen: string }>).detail?.screen
       if (screen) setActiveScreen(screen)
     }
@@ -1107,7 +1127,7 @@ export default function Widget() {
       window.removeEventListener(CC_OPEN, onOpen)
       window.removeEventListener(CC_CLOSE, onClose)
     }
-  }, [isAuthenticated, isHydrated])
+  }, [isAuthenticated, isHydrated, privacyAccepted])
 
   // ── Auth success listener (auth.html storage signal) ──
   useEffect(() => {
@@ -1115,12 +1135,13 @@ export default function Widget() {
       if (area === "local" && changes.cc_auth_success) {
         hydrate()
         setActiveScreen(null)
-        // Check if user has already accepted the privacy policy
+        // After auth success, always check privacy first
         chrome.storage.local.get(["cc_privacy_accepted"], (res) => {
           if (res.cc_privacy_accepted) {
+            setPrivacyAccepted(true)
             setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
           } else {
-            // Show privacy consent dialog first
+            // Must accept privacy before anything else
             setShowPrivacyConsent(true)
           }
         })
@@ -1190,8 +1211,14 @@ export default function Widget() {
       {showPrivacyConsent && (
         <PrivacyConsentDialog
           onAccept={() => {
+            setPrivacyAccepted(true)
             setShowPrivacyConsent(false)
-            setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+            // After consent: if not logged in → show auth; if logged in → open menu
+            if (!isAuthenticated) {
+              setTimeout(() => setActiveScreen("auth"), 120)
+            } else {
+              setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 120)
+            }
           }}
         />
       )}
@@ -1206,7 +1233,7 @@ export default function Widget() {
         />
       )}
       {!showPrivacyConsent && screenEl && (
-        <DraggableShell onClose={shellOnClose}>
+        <DraggableShell onClose={shellOnClose} privacyAccepted={privacyAccepted}>
           {screenEl}
         </DraggableShell>
       )}

@@ -39,7 +39,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>("menu")
   const [quoteIdx, setQuoteIdx] = useState(0)
   const [visible, setVisible] = useState(false)
-  const [showPrivacyConsent, setShowPrivacyConsent] = useState(false)
+  const [privacyAccepted, setPrivacyAccepted] = useState<boolean | null>(null)
 
   useEffect(() => {
     hydrate()
@@ -60,9 +60,7 @@ function App() {
       }
 
       chrome.storage.local.get(["cc_privacy_accepted"], (res) => {
-        if (!res.cc_privacy_accepted) {
-          setShowPrivacyConsent(true)
-        }
+        setPrivacyAccepted(!!res.cc_privacy_accepted)
       })
 
       setTimeout(() => setVisible(true), 60)
@@ -95,7 +93,8 @@ function App() {
     go(id as Screen)
   }
 
-  if (!isHydrated) {
+  // Still loading privacy status or auth — show spinner
+  if (!isHydrated || privacyAccepted === null) {
     return (
      <div className="w-[380px] h-[600px] flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-3">
@@ -122,9 +121,20 @@ function App() {
     )
   }
 
+  // Login is allowed without consent — show auth form first
   if (!isAuthenticated) {
     return <AuthForm />
   }
+
+  // After login: if privacy not accepted yet, block main app and show consent
+  if (!privacyAccepted) {
+    return (
+      <PrivacyConsentDialog
+        onAccept={() => setPrivacyAccepted(true)}
+      />
+    )
+  }
+
 
   return (
     <div
@@ -253,11 +263,7 @@ function App() {
       <div className="absolute -top-24 -left-16 w-64 h-64 rounded-full bg-blue-200/40 blur-3xl" />
       <div className="absolute bottom-0 right-0 w-56 h-56 rounded-full bg-sky-100/40 blur-3xl" />
 
-      {showPrivacyConsent && (
-        <PrivacyConsentDialog onAccept={() => setShowPrivacyConsent(false)} />
-      )}
-
-      {!showPrivacyConsent && [
+      {[
         {
           s: "menu" as Screen,
           node: (
