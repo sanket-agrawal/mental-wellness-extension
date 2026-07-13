@@ -43,7 +43,7 @@ function PolicyContent() {
       fontFamily: "-apple-system,BlinkMacSystemFont,sans-serif",
       fontSize: 12.5, lineHeight: 1.65, color: "#2b2b2b",
     }}>
-      <H2>Privacy Policy -Cove by CatalystCare</H2>
+      <H2>Privacy Policy - Cove by CatalystCare</H2>
       <p style={{ fontSize: 11, color: "#8aadcc", margin: "0 0 18px" }}>
         Last updated: 5 July 2026 &nbsp;|&nbsp; Effective for: Cove browser extension
       </p>
