@@ -571,8 +571,10 @@ function initWidget(iconSrc: string) {
       const isLeft = res.cc_fab_side === 'left';
       fab.classList.add(isLeft ? "cc-hidden-left" : "cc-hidden-right");
       if (res.cc_fab_pos) {
-        fab.style.setProperty('top', res.cc_fab_pos.y + 'px', 'important');
-        fab.style.setProperty('--fab-top', res.cc_fab_pos.y + 'px');
+        // Bug 3 fix: clamp saved Y to current viewport so multi-monitor shifts don't push FAB offscreen
+        const clampedY = Math.max(0, Math.min(res.cc_fab_pos.y, window.innerHeight - 48));
+        fab.style.setProperty('top', clampedY + 'px', 'important');
+        fab.style.setProperty('--fab-top', clampedY + 'px');
         if (isLeft) {
           fab.style.setProperty('left', '0px', 'important');
           fab.style.setProperty('right', 'auto', 'important');
@@ -582,7 +584,29 @@ function initWidget(iconSrc: string) {
         }
       }
     } else {
-      if (res.cc_fab_pos) setFabPos(res.cc_fab_pos.x, res.cc_fab_pos.y);
+      if (res.cc_fab_pos) {
+        // Bug 3 fix: clamp saved position to current viewport dimensions
+        const FAB_W = 54, FAB_H = 54;
+        const clampedX = Math.max(0, Math.min(res.cc_fab_pos.x, window.innerWidth - FAB_W));
+        const clampedY = Math.max(0, Math.min(res.cc_fab_pos.y, window.innerHeight - FAB_H));
+        setFabPos(clampedX, clampedY);
+      }
+    }
+  });
+
+  // Bug 3 fix: re-clamp FAB position when viewport changes (e.g. moving between monitors)
+  window.addEventListener("resize", () => {
+    const rect = fab.getBoundingClientRect();
+    const isHidden = fab.classList.contains("cc-hidden-tab");
+    const FAB_W = isHidden ? 24 : 54;
+    const FAB_H = isHidden ? 48 : 54;
+    const newTop = Math.max(0, Math.min(rect.top, window.innerHeight - FAB_H));
+    if (isHidden) {
+      fab.style.setProperty('top', newTop + 'px', 'important');
+      fab.style.setProperty('--fab-top', newTop + 'px');
+    } else {
+      const newLeft = Math.max(0, Math.min(rect.left, window.innerWidth - FAB_W));
+      setFabPos(newLeft, newTop);
     }
   });
 
@@ -1062,6 +1086,11 @@ export default function Widget() {
   const [autoQuote, setAutoQuote] = useState<{ text: string; author: string; feeling: { symbol: string; label: string } } | null>(null)
   const [showPrivacyConsent, setShowPrivacyConsent] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
+  // soundsMounted: true once user starts the sounds screen; false only when they fully close it.
+  // Keeping it mounted (even when activeScreen !== "sounds") preserves the AudioContext so
+  // music keeps playing while the panel is hidden. display:none on the wrapper hides the UI
+  // without triggering the component's cleanup / AudioContext teardown.
+  const [soundsMounted, setSoundsMounted] = useState(false)
   const { isAuthenticated, isHydrated, hydrate } = useAuthStore()
   const activeScreenRef = useRef<string | null>(null)
   useEffect(() => { activeScreenRef.current = activeScreen }, [activeScreen])
@@ -1083,6 +1112,9 @@ export default function Widget() {
   useEffect(() => {
     const onAutoQuote = () => {
       if (activeScreenRef.current) return
+      // Bug 1 fix: do not show quote bubble when the widget is hidden (tab-peek state)
+      const fab = document.getElementById("cc-fab")
+      if (fab?.classList.contains("cc-hidden-tab")) return
       if (!QUOTES.length) return
       const q = QUOTES[Math.floor(Math.random() * QUOTES.length)]
       setAutoQuote({ text: q.text, author: q.author, feeling: q.feeling })
@@ -1108,6 +1140,13 @@ export default function Widget() {
         return
       }
 
+      // If sounds are mounted (playing or panel was open), bring the panel back
+      // instead of opening the radial menu — so user can see / stop the audio.
+      if (soundsMounted) {
+        setActiveScreen("sounds")
+        return
+      }
+
       // Step 3: All good — open menu
       window.dispatchEvent(new CustomEvent(CC_OPEN_MENU))
     }
@@ -1116,7 +1155,11 @@ export default function Widget() {
       // Block screen opens until privacy is accepted
       if (!privacyAccepted) return
       const screen = (e as CustomEvent<{ screen: string }>).detail?.screen
-      if (screen) setActiveScreen(screen)
+      if (screen) {
+        // Mount the sounds component tree the first time it is opened
+        if (screen === "sounds") setSoundsMounted(true)
+        setActiveScreen(screen)
+      }
     }
     const onClose = () => setActiveScreen(null)
     window.addEventListener("cc:fab-clicked", onFabClick)
@@ -1127,7 +1170,7 @@ export default function Widget() {
       window.removeEventListener(CC_OPEN, onOpen)
       window.removeEventListener(CC_CLOSE, onClose)
     }
-  }, [isAuthenticated, isHydrated, privacyAccepted])
+  }, [isAuthenticated, isHydrated, privacyAccepted, soundsMounted])
 
   // ── Auth success listener (auth.html storage signal) ──
   useEffect(() => {
@@ -1158,7 +1201,20 @@ export default function Widget() {
     }
   }
 
+  // Fully unmount the sounds screen and stop all audio
+  const closeSoundsCompletely = () => {
+    setSoundsMounted(false)
+    setActiveScreen(null)
+    if (isAuthenticated) {
+      setTimeout(() => window.dispatchEvent(new CustomEvent(CC_OPEN_MENU)), 50)
+    }
+  }
+
   const minimizeScreen = () => setActiveScreen(null)
+
+  // Minimize sounds: panel hides (display:none on wrapper) but component stays mounted.
+  // AudioContext is a JS ref — it is NOT affected by DOM visibility, so audio keeps playing.
+  const minimizeSounds = () => setActiveScreen(null)
 
   const screenEl = (() => {
     switch (activeScreen) {
@@ -1179,8 +1235,6 @@ export default function Widget() {
         return <ChatScreen onBack={closeScreen} hideBackButton />
       case "breathe":
         return <BreatheScreen onBack={closeScreen} hideBackButton />
-      case "sounds":
-        return <SoundsScreen onBack={closeScreen} hideBackButton />
       case "pomodoro":
         return (
           <PomodoroScreen
@@ -1196,7 +1250,10 @@ export default function Widget() {
     }
   })()
 
-  // ← CHANGED: auth close just dismisses (no menu re-open since user isn't logged in yet)
+  // Shell × button behaviour:
+  // - pomodoro → minimize (timer keeps running)
+  // - auth     → just dismiss (user not logged in yet)
+  // - others   → full close + reopen menu
   const shellOnClose =
     activeScreen === "pomodoro" ? minimizeScreen :
     activeScreen === "auth"     ? () => setActiveScreen(null) :
@@ -1213,7 +1270,6 @@ export default function Widget() {
           onAccept={() => {
             setPrivacyAccepted(true)
             setShowPrivacyConsent(false)
-            // After consent: if not logged in → show auth; if logged in → open menu
             if (!isAuthenticated) {
               setTimeout(() => setActiveScreen("auth"), 120)
             } else {
@@ -1223,7 +1279,8 @@ export default function Widget() {
         />
       )}
 
-      {!showPrivacyConsent && autoQuote && !activeScreen && (
+      {/* Bug 1 fix: guard is also inside onAutoQuote (cc-hidden-tab check) */}
+      {!showPrivacyConsent && autoQuote && !activeScreen && !soundsMounted && (
         <AutoQuoteBubble
           text={autoQuote.text}
           author={autoQuote.author}
@@ -1232,6 +1289,34 @@ export default function Widget() {
           onOpen={() => { setAutoQuote(null); setActiveScreen("quote") }}
         />
       )}
+
+      {/*
+        Sounds screen — single instance, always mounted once started.
+        The wrapper uses display:none to hide the UI when not active.
+        AudioContext is a pure-JS ref; display:none does NOT pause or
+        destroy it, so music keeps playing while the panel is hidden.
+        The component is only unmounted (and audio cleaned up) when
+        closeSoundsCompletely() is called via the Back button.
+      */}
+      {soundsMounted && (
+        <div
+          aria-hidden={activeScreen !== "sounds" ? "true" : undefined}
+          style={{
+            display: activeScreen === "sounds" ? undefined : "none",
+            pointerEvents: activeScreen === "sounds" ? undefined : "none",
+          }}
+        >
+          <DraggableShell onClose={closeSoundsCompletely} privacyAccepted={privacyAccepted}>
+            <SoundsScreen
+              onBack={closeSoundsCompletely}
+              onMinimize={minimizeSounds}
+              hideBackButton
+            />
+          </DraggableShell>
+        </div>
+      )}
+
+      {/* All other screens (never includes sounds) */}
       {!showPrivacyConsent && screenEl && (
         <DraggableShell onClose={shellOnClose} privacyAccepted={privacyAccepted}>
           {screenEl}

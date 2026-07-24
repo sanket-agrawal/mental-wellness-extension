@@ -233,7 +233,7 @@ const DEFAULT_VOL = 0.65
 // ─────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────
-export function SoundsScreen({ onBack ,hideBackButton  }: { onBack: () => void ,hideBackButton?:boolean}) {
+export function SoundsScreen({ onBack, onMinimize, hideBackButton }: { onBack: () => void; onMinimize?: () => void; hideBackButton?: boolean }) {
   const [playing, setPlaying] = useState<PlayingMap>({})
   const [volumes, setVolumes] = useState<VolumeMap>({})
   const [masterVol, setMasterVol] = useState(0.7)
@@ -431,7 +431,7 @@ const toggle = useCallback((s: SoundDef) => {
     const ctxSnap = ctxRef.current
     return () => {
       nodes.forEach(({ src, gain }) => {
-        if (src) { try { src.stop() } catch { /* already stopped */ }; src.disconnect() }
+        if (src) { try { if ("stop" in src) src.stop() } catch { /* already stopped */ }; src.disconnect() }
         gain.disconnect()
       })
       nodes.clear()
@@ -569,9 +569,30 @@ const toggle = useCallback((s: SoundDef) => {
             </p>
           )}
           {anyPlaying && (
-            <p style={{ fontSize: 11, color: "#16B7C2", textAlign: "center", fontWeight: 500, marginTop: 6 }}>
-              {playingCount} {playingCount === 1 ? "sound" : "sounds"} playing · tap any to stop
-            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+              <p style={{ fontSize: 11, color: "#16B7C2", fontWeight: 500, margin: 0 }}>
+                {playingCount} {playingCount === 1 ? "sound" : "sounds"} playing · tap any to stop
+              </p>
+              {onMinimize && (
+                <button
+                  onClick={onMinimize}
+                  title="Minimize — music keeps playing"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 4,
+                    padding: "4px 10px", borderRadius: 20,
+                    background: "rgba(22,183,194,.12)",
+                    border: "1.5px solid rgba(22,183,194,.35)",
+                    color: "#16B7C2", fontSize: 10, fontWeight: 600,
+                    cursor: "pointer", transition: "all .18s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(22,183,194,.22)" }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(22,183,194,.12)" }}
+                >
+                  <span style={{ fontSize: 11 }}>–</span> Minimize
+                </button>
+              )}
+            </div>
           )}
         </div>
 
