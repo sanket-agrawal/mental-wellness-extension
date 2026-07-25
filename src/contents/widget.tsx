@@ -315,7 +315,8 @@ function initWidget(iconSrc: string) {
     }
   })
 
-  let isOpen = false, nodes: HTMLButtonElement[] = [], bd: HTMLElement | null = null
+  let isOpen = false, isClosing = false, nodes: HTMLButtonElement[] = [], bd: HTMLElement | null = null
+  let closeMenuTimer: ReturnType<typeof setTimeout> | null = null
   let subNodes: HTMLButtonElement[] = [], subConnectors: SVGSVGElement[] = []
   let subHoverTimer: ReturnType<typeof setTimeout> | null = null
   let subCloseTimer: ReturnType<typeof setTimeout> | null = null
@@ -450,15 +451,18 @@ function initWidget(iconSrc: string) {
   }
 
   const closeMenu = () => {
-    if (!isOpen) return; isOpen = false
+    if (!isOpen) return; isOpen = false; isClosing = true
+    if (closeMenuTimer) { clearTimeout(closeMenuTimer); closeMenuTimer = null }
     fab.classList.remove("cc-open"); closeSubNodes(true)
     r1.classList.remove("cc-vis"); r2.classList.remove("cc-vis")
     bd?.remove(); bd = null
-    nodes.forEach((btn, i) => {
+    const nodesToRemove = nodes.slice() // snapshot — avoid stale-closure bug in production
+    nodes = []; meditateBtnRef = null
+    nodesToRemove.forEach((btn, i) => {
       btn.classList.remove("cc-float")
       Object.assign(btn.style, { transition: `transform .25s cubic-bezier(.4,0,1,1) ${i * 25}ms, opacity .18s ease ${i * 25}ms`, transform: "scale(0.3)", opacity: "0" })
     })
-    setTimeout(() => { nodes.forEach(b => b.remove()); nodes = []; meditateBtnRef = null }, 380)
+    closeMenuTimer = setTimeout(() => { nodesToRemove.forEach(b => b.remove()); isClosing = false; closeMenuTimer = null }, 380)
   }
 
   const openMenu = () => {
@@ -736,6 +740,7 @@ function initWidget(iconSrc: string) {
       dispatch(CC_OPEN, { screen: "pomodoro" }); return
     }
     if (isOpen) { closeSubNodes(); closeMenu(); return }
+    if (isClosing) return; // Close animation in progress — ignore open request
     closeHoverNode();
     dispatch("cc:fab-clicked")
   })
