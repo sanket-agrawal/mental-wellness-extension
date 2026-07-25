@@ -36,7 +36,6 @@ export function BreatheScreen({
     "Hold briefly at the smallest size, then repeat (Hold, 4s)"
   ]
 
-
   const circleScale = breathingPhase < 2 ? 1.25 : 0.85
   const circleColor =
     breathingPhase === 0
@@ -49,8 +48,14 @@ export function BreatheScreen({
 
   return (
     <div
-      style={{ display: "flex", flexDirection: "column", minHeight: 420 }}
-      className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-hidden"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 420,
+        background: "linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #e0e7ff 100%)",
+        position: "relative",
+        overflow: "hidden"
+      }}
     >
       <style>{`
         @keyframes blob-pulse-1 {
@@ -90,68 +95,192 @@ export function BreatheScreen({
         .fade-in-scale { animation: fade-in-scale 0.4s ease-out both; }
       `}</style>
 
-      {/* Ambient Background Elements (kept small so they stay contained) */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="blob-1 absolute -top-16 -right-16 w-40 h-40 bg-gradient-to-br from-blue-200/30 to-indigo-300/30 rounded-full blur-3xl" />
-        <div className="blob-2 absolute -bottom-16 -left-16 w-48 h-48 bg-gradient-to-tr from-purple-200/30 to-pink-300/30 rounded-full blur-3xl" />
+      {/* Ambient Background Elements */}
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+        <div
+          className="blob-1"
+          style={{
+            position: "absolute",
+            top: -64,
+            right: -64,
+            width: 160,
+            height: 160,
+            background: "linear-gradient(135deg, rgba(191,219,254,0.3), rgba(165,180,252,0.3))",
+            borderRadius: "50%",
+            filter: "blur(40px)"
+          }}
+        />
+        <div
+          className="blob-2"
+          style={{
+            position: "absolute",
+            bottom: -64,
+            left: -64,
+            width: 192,
+            height: 192,
+            background: "linear-gradient(135deg, rgba(216,180,254,0.3), rgba(249,168,212,0.3))",
+            borderRadius: "50%",
+            filter: "blur(40px)"
+          }}
+        />
       </div>
 
       <TopBar title="Meditation" onBack={onBack} showBack={!hideBackButton} />
 
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-3 text-center">
-        <h2 className="text-base font-bold text-[#0c3e6f] mb-1 flex items-center justify-center gap-2">
-          <Wind className="w-4 h-4" />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 10,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "12px 24px",
+          textAlign: "center"
+        }}
+      >
+        <h2
+          style={{
+            fontWeight: "bold",
+            color: "#0c3e6f",
+            marginBottom: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8
+          }}
+        >
+          <Wind style={{ width: 16, height: 16 }} />
           Breathing Practice
         </h2>
-        <p className="text-xs text-gray-500 mb-8">4-4-4-4 Box Breathing Technique</p>
+        <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 32 }}>4-4-4-4 Box Breathing Technique</p>
 
-        <div className="relative flex items-center justify-center mb-5">
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           {/* Outer Ring */}
-          <div className="breathing-ring absolute w-40 h-40 rounded-full border-4 border-indigo-200" />
+          <div
+            className="breathing-ring"
+            style={{
+              position: "absolute",
+              width: 160,
+              height: 160,
+              borderRadius: "50%",
+              border: "4px solid #c7d2fe"
+            }}
+          />
 
           {/* Breathing Circle */}
           <div
             style={{
+              width: 112,
+              height: 112,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+              position: "relative",
+              overflow: "hidden",
               transform: `scale(${circleScale})`,
               backgroundColor: circleColor,
               transition: "transform 3.5s ease-in-out, background-color 0.5s ease-in-out"
             }}
-            className="w-28 h-28 rounded-full flex items-center justify-center shadow-xl relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-full" />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "linear-gradient(135deg, rgba(255,255,255,0.2), transparent)",
+                borderRadius: "50%"
+              }}
+            />
 
-            <div key={breathing} className="fade-in-scale text-center z-10">
-              <div className="text-sm font-bold text-white leading-tight">
+            <div key={breathing} className="fade-in-scale" style={{ textAlign: "center", zIndex: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: "bold", color: "white", lineHeight: 1.2 }}>
                 {breathing}
               </div>
-              <div className="text-white/80 text-[10px]">4 seconds</div>
+              <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 10 }}>4 seconds</div>
             </div>
 
-            <div className="breathing-pulse-ring absolute inset-0 rounded-full border-2 border-white/30" />
+            <div
+              className="breathing-pulse-ring"
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "50%",
+                border: "2px solid rgba(255,255,255,0.3)"
+              }}
+            />
           </div>
         </div>
 
-        <p className="breathing-caption text-gray-500 text-xs italic mt-5 mb-5">
+        <p
+          className="breathing-caption"
+          style={{ color: "#6b7280", fontSize: 12, fontStyle: "italic", marginTop: 20, marginBottom: 20 }}
+        >
           Follow the rhythm • Breathe with intention
         </p>
 
         {/* Balloon Instructions */}
-        <div className="fade-in-up w-full max-w-xs bg-white/60 backdrop-blur-md rounded-2xl p-4 shadow-md border border-white/30 text-left">
-          <h3 className="text-xs font-bold text-gray-800 mb-2.5 flex items-center gap-1.5">
-            <ListChecks className="w-3.5 h-3.5 text-[#0c3e6f]" />
+        <div
+          className="fade-in-up"
+          style={{
+            width: "100%",
+            maxWidth: 320,
+            background: "rgba(255,255,255,0.6)",
+            backdropFilter: "blur(12px)",
+            borderRadius: 16,
+            padding: 16,
+            boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
+            border: "1px solid rgba(255,255,255,0.3)",
+            textAlign: "left"
+          }}
+        >
+          <h3
+            style={{
+              fontSize: 12,
+              fontWeight: "bold",
+              color: "#1f2937",
+              marginBottom: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            <ListChecks style={{ width: 14, height: 14, color: "#0c3e6f" }} />
             How to Use the Breathing Balloon
           </h3>
-          <div className="space-y-1.5">
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {balloonInstructions.map((instruction: string, j: number) => (
               <div
                 key={j}
-                className="fade-in-up flex items-start gap-2"
-                style={{ animationDelay: `${j * 0.08}s` }}
+                className="fade-in-up"
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  animationDelay: `${j * 0.08}s`
+                }}
               >
-                <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#0c3e6f] text-white text-[9px] font-semibold flex-shrink-0 mt-0.5">
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    backgroundColor: "#0c3e6f",
+                    color: "white",
+                    fontSize: 9,
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    marginTop: 2
+                  }}
+                >
                   {j + 1}
                 </div>
-                <span className="text-gray-600 text-[11px] leading-snug">
+                <span style={{ color: "#4b5563", fontSize: 11, lineHeight: 1.4 }}>
                   {instruction}
                 </span>
               </div>
