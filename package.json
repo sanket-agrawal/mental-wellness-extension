@@ -55,7 +55,8 @@
     "web_accessible_resources": [
       {
         "resources": [
-          "tabs/auth.html"
+          "tabs/auth.html",
+          "tabs/onboarding.html"
         ],
         "matches": [
           "<all_urls>"
