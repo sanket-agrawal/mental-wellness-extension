@@ -1,7 +1,7 @@
 {
   "name": "cove-by-catalystcare",
   "displayName": "Cove by CatalystCare",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Wellness Companion",
   "author": "Sanket Agrawal <mailsanketagrawal@gmail.com>",
   "scripts": {
